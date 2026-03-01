@@ -35,7 +35,7 @@ class PrinterSentryLastFrameCamera(CoordinatorEntity[PrinterSentryCoordinator], 
         self._attr_unique_id = f"{entry.entry_id}_last_frame"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": coordinator.name,
+            "name": coordinator.integration_name,
             "manufacturer": "PrinterSentry",
             "model": "RTSP + Ollama Vision Monitor",
         }

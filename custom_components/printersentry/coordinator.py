@@ -105,11 +105,6 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.data = self._default_state("Initializing")
 
     @property
-    def name(self) -> str:
-        """Return configured integration name."""
-        return self._name
-
-    @property
     def last_frame(self) -> bytes | None:
         """Return last captured frame bytes."""
         return self._last_frame
@@ -138,7 +133,9 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         options = self.config_entry.options
         data = self.config_entry.data
 
-        self._name = str(options.get(CONF_NAME, data.get(CONF_NAME, DEFAULT_NAME)))
+        self.integration_name = str(
+            options.get(CONF_NAME, data.get(CONF_NAME, DEFAULT_NAME))
+        )
         self.rtsp_url = str(options.get(CONF_RTSP_URL, data[CONF_RTSP_URL]))
         self.ollama_base_url = str(
             options.get(CONF_OLLAMA_BASE_URL, data[CONF_OLLAMA_BASE_URL])
@@ -365,14 +362,18 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     _LOGGER.warning(
                         "Invalid model JSON on attempt %s for %s: %s",
                         parse_attempt + 1,
-                        self.name,
+                        self.integration_name,
                         err,
                     )
                     continue
                 _LOGGER.error("Model output parsing failed: %s", err)
                 return unknown_result(f"Invalid model JSON response: {err}")
             except Exception as err:  # noqa: BLE001
-                _LOGGER.error("Ollama inference failed for %s: %s", self.name, err)
+                _LOGGER.error(
+                    "Ollama inference failed for %s: %s",
+                    self.integration_name,
+                    err,
+                )
                 return unknown_result(f"Ollama inference failed: {err}")
 
         return unknown_result("Inference failed")
@@ -466,7 +467,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 EVENT_INCIDENT,
                 {
                     "entry_id": self.config_entry.entry_id,
-                    "name": self.name,
+                    "name": self.integration_name,
                     "status": result.status,
                     "confidence": result.confidence,
                     "reason": result.reason,
@@ -476,13 +477,13 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             _LOGGER.warning(
                 "Incident triggered for %s after %s consecutive unhealthy checks",
-                self.name,
+                self.integration_name,
                 self._consecutive_unhealthy_count,
             )
 
         if transition.cleared_incident:
             self._incident_start_time = None
-            _LOGGER.info("Incident cleared for %s", self.name)
+            _LOGGER.info("Incident cleared for %s", self.integration_name)
 
         should_notify = self.notify_on_incident and should_send_notification(
             incident_active=self._incident_active,
@@ -495,7 +496,10 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if should_notify:
             await self._async_send_notification(result, now)
             self._last_notification_time = now
-            _LOGGER.info("Persistent notification emitted for %s", self.name)
+            _LOGGER.info(
+                "Persistent notification emitted for %s",
+                self.integration_name,
+            )
 
         state = {
             "status": result.status,
