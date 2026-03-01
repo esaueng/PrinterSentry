@@ -22,7 +22,7 @@
       }
     },
     "error": {
-      "invalid_rtsp_url": "RTSP URL must start with rtsp://",
+      "invalid_rtsp_url": "RTSP URL must start with rtsp:// or rtsps://",
       "invalid_ollama_url": "Ollama Base URL must be a valid http:// or https:// URL",
       "invalid_model": "Ollama model is required",
       "invalid_capture_method": "Invalid capture method"
@@ -50,7 +50,7 @@
       }
     },
     "error": {
-      "invalid_rtsp_url": "RTSP URL must start with rtsp://",
+      "invalid_rtsp_url": "RTSP URL must start with rtsp:// or rtsps://",
       "invalid_ollama_url": "Ollama Base URL must be a valid http:// or https:// URL",
       "invalid_model": "Ollama model is required",
       "invalid_capture_method": "Invalid capture method"

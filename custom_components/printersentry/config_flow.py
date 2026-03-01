@@ -118,7 +118,8 @@ def _validate_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
     data = dict(user_input)
 
     rtsp_url = str(data[CONF_RTSP_URL]).strip()
-    if not rtsp_url.startswith("rtsp://"):
+    parsed_rtsp = urlparse(rtsp_url)
+    if parsed_rtsp.scheme not in {"rtsp", "rtsps"} or not parsed_rtsp.netloc:
         raise ValueError("invalid_rtsp_url")
     data[CONF_RTSP_URL] = rtsp_url
 

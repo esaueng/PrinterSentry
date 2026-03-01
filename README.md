@@ -1,6 +1,6 @@
 # PrinterSentry
 
-PrinterSentry is a Home Assistant custom integration (HACS-compatible) that monitors a 3D printer RTSP camera stream and classifies print health as `HEALTHY` or `UNHEALTHY` using a remote Ollama vision model.
+PrinterSentry is a Home Assistant custom integration (HACS-compatible) that monitors a 3D printer RTSP/RTSPS camera stream and classifies print health as `HEALTHY` or `UNHEALTHY` using a remote Ollama vision model.
 
 It runs inside Home Assistant (Core / Container / OS). This repository does **not** run an Ollama container.
 
@@ -123,7 +123,7 @@ These services do not control hardware. They only log and fire a stub event.
 
 ### RTSP connectivity
 
-- Verify RTSP URL format and credentials.
+- Verify RTSP/RTSPS URL format and credentials.
 - Test stream from the HA host network with ffmpeg/vlc.
 - If your camera prefers UDP, note this integration currently uses ffmpeg with TCP transport for reliability.
 
