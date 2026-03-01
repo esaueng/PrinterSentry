@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3 - 2026-03-01
+
+- Avoided blocking config-entry reloads/options updates by running refresh in background
+
 ## 0.1.2 - 2026-03-01
 
 - Changed setup flow to avoid blocking config entry startup on first camera refresh

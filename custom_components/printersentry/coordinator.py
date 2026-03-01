@@ -213,7 +213,10 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.update_interval = timedelta(seconds=self.check_interval_sec)
         self._history = deque(old_history[-self.history_size :], maxlen=self.history_size)
         self._store.async_delay_save(self._serialize_store, 5)
-        await self.async_request_refresh()
+        self.hass.async_create_task(
+            self.async_refresh(),
+            name=f"{DOMAIN}_{self.config_entry.entry_id}_config_refresh",
+        )
 
     async def _async_restore_store(self) -> None:
         """Restore history and incident state from storage."""
