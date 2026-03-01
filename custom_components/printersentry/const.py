@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "printersentry"
 
-PLATFORMS = ["sensor", "binary_sensor", "camera"]
+PLATFORMS = ["sensor", "binary_sensor", "camera", "button"]
 
 CONF_NAME = "name"
 CONF_RTSP_URL = "rtsp_url"
@@ -24,6 +24,7 @@ CAPTURE_METHOD_OPENCV = "opencv"
 
 STATUS_HEALTHY = "HEALTHY"
 STATUS_UNHEALTHY = "UNHEALTHY"
+STATUS_EMPTY = "EMPTY"
 STATUS_UNKNOWN = "UNKNOWN"
 
 EVENT_INCIDENT = "printersentry_incident"
@@ -57,6 +58,7 @@ DECISION (strict):
 
 * Output \"UNHEALTHY\" if ANY visible defect exists.
 * If unsure, output \"UNHEALTHY\" with lower confidence.
+* Output \"EMPTY\" if the build plate is clearly empty (no active print present).
 * Output \"HEALTHY\" only when the print clearly looks normal and stable.
 
 VISIBLE DEFECTS (UNHEALTHY if any are visible):
@@ -84,16 +86,21 @@ CONFIDENCE (0.0–1.0, never exactly 0.0 or 1.0):
 SIGNALS:
 Set TRUE only if clearly visible; if unsure set FALSE.
 If status is HEALTHY, then all defect signals must be FALSE.
+If status is EMPTY, all signals must be FALSE.
 bed_adhesion_ok may be TRUE only when adhesion clearly looks solid.
 
 REASON:
 One short sentence describing the key visible evidence (no speculation).
 
+SHORT_EXPLANATION:
+Very short phrase (3-8 words) for quick UI display.
+
 REQUIRED JSON SCHEMA:
 {
-\"status\": \"HEALTHY\" | \"UNHEALTHY\",
+\"status\": \"HEALTHY\" | \"UNHEALTHY\" | \"EMPTY\",
 \"confidence\": number,
 \"reason\": string,
+\"short_explanation\": string,
 \"signals\": {
 \"bed_adhesion_ok\": boolean,
 \"spaghetti_detected\": boolean,

@@ -249,6 +249,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "status": latest.get("status", STATUS_UNKNOWN),
                     "confidence": latest.get("confidence"),
                     "reason": latest.get("reason", ""),
+                    "short_explanation": latest.get("short_explanation", ""),
                     "signals": latest.get("signals", {}),
                     "last_update": latest.get("timestamp"),
                     "last_frame_time": latest.get("frame_time"),
@@ -283,6 +284,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "status": STATUS_UNKNOWN,
             "confidence": None,
             "reason": reason,
+            "short_explanation": "Unknown",
             "signals": {
                 "bed_adhesion_ok": False,
                 "spaghetti_detected": False,
@@ -485,6 +487,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "status": result.status,
                     "confidence": result.confidence,
                     "reason": result.reason,
+                    "short_explanation": result.short_explanation,
                     "timestamp": now.isoformat(),
                     "signals": result.signals,
                 },
@@ -519,6 +522,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "status": result.status,
             "confidence": result.confidence,
             "reason": result.reason,
+            "short_explanation": result.short_explanation,
             "signals": result.signals,
             "last_update": now.isoformat(),
             "last_frame_time": self._last_frame_time.isoformat()
@@ -539,6 +543,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "status": result.status,
             "confidence": result.confidence,
             "reason": result.reason,
+            "short_explanation": result.short_explanation,
             "signals": result.signals,
             "frame_time": state["last_frame_time"],
             "incident_active": self._incident_active,
@@ -562,6 +567,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 f"Status: {result.status}\n"
                 f"Confidence: {result.confidence if result.confidence is not None else 'n/a'}\n"
                 f"Reason: {result.reason}\n"
+                f"Short explanation: {result.short_explanation}\n"
                 f"Time: {now.isoformat()}\n\n"
                 "Open camera.printersentry_last_frame (or your dashboard card) to inspect the print."
             ),

@@ -25,6 +25,7 @@ async def async_setup_entry(
         [
             PrinterSentryStatusSensor(coordinator, entry),
             PrinterSentryConfidenceSensor(coordinator, entry),
+            PrinterSentryShortExplanationSensor(coordinator, entry),
         ]
     )
 
@@ -66,6 +67,7 @@ class PrinterSentryStatusSensor(PrinterSentryBaseEntity, SensorEntity):
         return {
             "confidence": data.get("confidence"),
             "reason": data.get("reason"),
+            "short_explanation": data.get("short_explanation"),
             "last_update": data.get("last_update"),
             "signals": data.get("signals", {}),
             "consecutive_unhealthy_count": data.get("consecutive_unhealthy_count", 0),
@@ -92,3 +94,18 @@ class PrinterSentryConfidenceSensor(PrinterSentryBaseEntity, SensorEntity):
         if confidence is None:
             return None
         return round(float(confidence), 3)
+
+
+class PrinterSentryShortExplanationSensor(PrinterSentryBaseEntity, SensorEntity):
+    """Represents the short explanation returned by inference."""
+
+    _attr_name = "Short Explanation"
+    _attr_icon = "mdi:text-short"
+
+    def __init__(self, coordinator: PrinterSentryCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_short_explanation"
+
+    @property
+    def native_value(self) -> str:
+        return str(self.coordinator.data.get("short_explanation", ""))

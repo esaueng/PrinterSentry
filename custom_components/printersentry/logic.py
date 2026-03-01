@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
 
-from .const import STATUS_HEALTHY, STATUS_UNHEALTHY, STATUS_UNKNOWN
+from .const import STATUS_EMPTY, STATUS_HEALTHY, STATUS_UNHEALTHY, STATUS_UNKNOWN
 
 REQUIRED_SIGNAL_KEYS = (
     "bed_adhesion_ok",
@@ -35,6 +35,7 @@ class InferenceResult:
     status: str
     confidence: float | None
     reason: str
+    short_explanation: str
     signals: dict[str, bool]
 
 
@@ -67,7 +68,7 @@ def parse_model_output(raw_text: str) -> InferenceResult:
         raise ValueError("Output must be a JSON object")
 
     status = payload.get("status")
-    if status not in (STATUS_HEALTHY, STATUS_UNHEALTHY):
+    if status not in (STATUS_HEALTHY, STATUS_UNHEALTHY, STATUS_EMPTY):
         raise ValueError("Invalid status")
 
     confidence = payload.get("confidence")
@@ -81,6 +82,11 @@ def parse_model_output(raw_text: str) -> InferenceResult:
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError("Reason must be a non-empty string")
     reason = reason.strip()
+
+    short_explanation = payload.get("short_explanation")
+    if not isinstance(short_explanation, str) or not short_explanation.strip():
+        raise ValueError("short_explanation must be a non-empty string")
+    short_explanation = short_explanation.strip()
 
     signals_raw = payload.get("signals")
     if not isinstance(signals_raw, dict):
@@ -102,11 +108,14 @@ def parse_model_output(raw_text: str) -> InferenceResult:
 
     if status == STATUS_HEALTHY and any(signals[key] for key in DEFECT_SIGNAL_KEYS):
         raise ValueError("Healthy output cannot have defect signals set")
+    if status == STATUS_EMPTY and any(signals.values()):
+        raise ValueError("Empty output cannot have any signals set")
 
     return InferenceResult(
         status=status,
         confidence=confidence,
         reason=reason,
+        short_explanation=short_explanation,
         signals=signals,
     )
 
@@ -117,6 +126,7 @@ def unknown_result(reason: str) -> InferenceResult:
         status=STATUS_UNKNOWN,
         confidence=None,
         reason=reason,
+        short_explanation="No valid result",
         signals={key: False for key in REQUIRED_SIGNAL_KEYS},
     )
 
@@ -138,7 +148,7 @@ def apply_incident_logic(
         if not incident_active and consecutive >= unhealthy_consecutive_threshold:
             incident_active = True
             new_incident = True
-    elif current_status == STATUS_HEALTHY:
+    elif current_status in (STATUS_HEALTHY, STATUS_EMPTY):
         consecutive = 0
         if incident_active:
             incident_active = False

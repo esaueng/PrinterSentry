@@ -1,6 +1,6 @@
 # PrinterSentry
 
-PrinterSentry is a Home Assistant custom integration (HACS-compatible) that monitors a 3D printer RTSP/RTSPS camera stream and classifies print health as `HEALTHY` or `UNHEALTHY` using a remote Ollama vision model.
+PrinterSentry is a Home Assistant custom integration (HACS-compatible) that monitors a 3D printer RTSP/RTSPS camera stream and classifies print health as `HEALTHY`, `UNHEALTHY`, or `EMPTY` using a remote Ollama vision model.
 
 It runs inside Home Assistant (Core / Container / OS). This repository does **not** run an Ollama container.
 
@@ -9,17 +9,20 @@ It runs inside Home Assistant (Core / Container / OS). This repository does **no
 - Samples an RTSP camera frame every configurable interval
 - Sends frame + strict safety prompt to remote Ollama over HTTP
 - Strict JSON parsing to normalize model output into:
-  - `status`: `HEALTHY` / `UNHEALTHY` / `UNKNOWN`
+  - `status`: `HEALTHY` / `UNHEALTHY` / `EMPTY` / `UNKNOWN`
   - `confidence`: `0.0` to `1.0` (for model outputs)
   - `reason`: short explanation
+  - `short_explanation`: compact UI-friendly phrase
   - `signals`: defect booleans
 - Incident logic using consecutive unhealthy threshold
 - Home Assistant entities:
   - `sensor.printersentry_status`
   - `sensor.printersentry_confidence`
+  - `sensor.printersentry_short_explanation`
   - `binary_sensor.printersentry_unhealthy`
   - `binary_sensor.printersentry_incident_active`
   - `camera.printersentry_last_frame`
+  - `button.printersentry_force_update`
 - Event on incident trigger: `printersentry_incident`
 - Optional persistent notification on incident with rate-limiting
 - Ring-buffer history (last `N`) with optional restore on restart via HA `Store`
@@ -85,7 +88,7 @@ Options can be updated later via the integration options dialog. Changes are app
   - `incident_active` becomes `true`
   - Event `printersentry_incident` is fired
   - Optional persistent notification is created
-- Incident clears after a `HEALTHY` result.
+- Incident clears after a `HEALTHY` or `EMPTY` result.
 - While incident is active, additional notifications are rate-limited by `min_notification_interval_sec`.
 
 ## Events and Services

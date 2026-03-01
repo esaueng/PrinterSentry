@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 - 2026-03-01
+
+- Added `EMPTY` model status for clearly empty build plates
+- Added `short_explanation` output field and exposed it in HA state/history
+- Added `button.printersentry_force_update` to trigger immediate refresh
+
 ## 0.1.3 - 2026-03-01
 
 - Avoided blocking config-entry reloads/options updates by running refresh in background
