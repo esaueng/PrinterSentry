@@ -23,6 +23,8 @@ async def async_setup_entry(
         [
             PrinterSentryUnhealthyBinarySensor(coordinator, entry),
             PrinterSentryIncidentBinarySensor(coordinator, entry),
+            PrinterSentryMotionDetectedBinarySensor(coordinator, entry),
+            PrinterSentryLlmReachableBinarySensor(coordinator, entry),
         ]
     )
 
@@ -71,3 +73,33 @@ class PrinterSentryIncidentBinarySensor(PrinterSentryBinaryBaseEntity):
     @property
     def is_on(self) -> bool:
         return bool(self.coordinator.data.get("incident_active", False))
+
+
+class PrinterSentryMotionDetectedBinarySensor(PrinterSentryBinaryBaseEntity):
+    """True when motion was detected in the latest frame comparison."""
+
+    _attr_name = "Motion Detected"
+    _attr_icon = "mdi:motion-sensor"
+
+    def __init__(self, coordinator: PrinterSentryCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_motion_detected"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.data.get("motion_detected", False))
+
+
+class PrinterSentryLlmReachableBinarySensor(PrinterSentryBinaryBaseEntity):
+    """True when the selected LLM endpoint was reachable on last inference attempt."""
+
+    _attr_name = "LLM Reachable"
+    _attr_icon = "mdi:cloud-check"
+
+    def __init__(self, coordinator: PrinterSentryCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_llm_reachable"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.data.get("llm_reachable", False))

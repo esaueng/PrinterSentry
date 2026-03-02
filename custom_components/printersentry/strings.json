@@ -4,12 +4,16 @@
     "step": {
       "user": {
         "title": "Add PrinterSentry",
-        "description": "Monitor a printer RTSP stream with remote Ollama vision classification.",
+        "description": "Monitor a printer RTSP stream with remote vision LLM classification.",
         "data": {
           "name": "Name",
           "rtsp_url": "RTSP URL",
           "ollama_base_url": "Ollama Base URL",
           "ollama_model": "Ollama Model",
+          "llm_provider": "LLM Provider",
+          "openai_base_url": "OpenAI Base URL",
+          "openai_model": "OpenAI Model",
+          "openai_api_key": "OpenAI API Key",
           "check_interval_sec": "Check Interval (seconds)",
           "ollama_timeout_sec": "Ollama Timeout (seconds)",
           "history_size": "History Size",
@@ -17,7 +21,9 @@
           "max_backoff_sec": "Max Backoff (seconds)",
           "capture_method": "Capture Method",
           "notify_on_incident": "Notify on Incident",
-          "min_notification_interval_sec": "Minimum Notification Interval (seconds)"
+          "min_notification_interval_sec": "Minimum Notification Interval (seconds)",
+          "motion_detection_enabled": "Motion Detection Enabled",
+          "motion_threshold": "Motion Threshold"
         }
       }
     },
@@ -25,7 +31,11 @@
       "invalid_rtsp_url": "RTSP URL must start with rtsp:// or rtsps://",
       "invalid_ollama_url": "Ollama Base URL must be a valid http:// or https:// URL",
       "invalid_model": "Ollama model is required",
-      "invalid_capture_method": "Invalid capture method"
+      "invalid_capture_method": "Invalid capture method",
+      "invalid_llm_provider": "Invalid LLM provider",
+      "invalid_openai_url": "OpenAI Base URL must be a valid http:// or https:// URL",
+      "invalid_openai_model": "OpenAI model is required",
+      "missing_openai_api_key": "OpenAI API key is required when provider is OpenAI"
     }
   },
   "options": {
@@ -38,6 +48,10 @@
           "rtsp_url": "RTSP URL",
           "ollama_base_url": "Ollama Base URL",
           "ollama_model": "Ollama Model",
+          "llm_provider": "LLM Provider",
+          "openai_base_url": "OpenAI Base URL",
+          "openai_model": "OpenAI Model",
+          "openai_api_key": "OpenAI API Key",
           "check_interval_sec": "Check Interval (seconds)",
           "ollama_timeout_sec": "Ollama Timeout (seconds)",
           "history_size": "History Size",
@@ -45,7 +59,9 @@
           "max_backoff_sec": "Max Backoff (seconds)",
           "capture_method": "Capture Method",
           "notify_on_incident": "Notify on Incident",
-          "min_notification_interval_sec": "Minimum Notification Interval (seconds)"
+          "min_notification_interval_sec": "Minimum Notification Interval (seconds)",
+          "motion_detection_enabled": "Motion Detection Enabled",
+          "motion_threshold": "Motion Threshold"
         }
       }
     },
@@ -53,10 +69,20 @@
       "invalid_rtsp_url": "RTSP URL must start with rtsp:// or rtsps://",
       "invalid_ollama_url": "Ollama Base URL must be a valid http:// or https:// URL",
       "invalid_model": "Ollama model is required",
-      "invalid_capture_method": "Invalid capture method"
+      "invalid_capture_method": "Invalid capture method",
+      "invalid_llm_provider": "Invalid LLM provider",
+      "invalid_openai_url": "OpenAI Base URL must be a valid http:// or https:// URL",
+      "invalid_openai_model": "OpenAI model is required",
+      "missing_openai_api_key": "OpenAI API key is required when provider is OpenAI"
     }
   },
   "selector": {
+    "llm_provider": {
+      "options": {
+        "ollama": "Ollama",
+        "openai": "OpenAI"
+      }
+    },
     "capture_method": {
       "options": {
         "ffmpeg": "FFmpeg",

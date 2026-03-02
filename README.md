@@ -1,13 +1,14 @@
 # PrinterSentry
 
-PrinterSentry is a Home Assistant custom integration (HACS-compatible) that monitors a 3D printer RTSP/RTSPS camera stream and classifies print health as `HEALTHY`, `UNHEALTHY`, or `EMPTY` using a remote Ollama vision model.
+PrinterSentry is a Home Assistant custom integration (HACS-compatible) that monitors a 3D printer RTSP/RTSPS camera stream and classifies print health as `HEALTHY`, `UNHEALTHY`, or `EMPTY` using a remote vision LLM (Ollama or OpenAI-compatible API).
 
 It runs inside Home Assistant (Core / Container / OS). This repository does **not** run an Ollama container.
 
 ## Features
 
 - Samples an RTSP camera frame every configurable interval
-- Sends frame + strict safety prompt to remote Ollama over HTTP
+- Motion-gates inference: only calls LLM when camera motion is detected
+- Sends frame + strict safety prompt to the selected LLM provider over HTTP
 - Strict JSON parsing to normalize model output into:
   - `status`: `HEALTHY` / `UNHEALTHY` / `EMPTY` / `UNKNOWN`
   - `confidence`: `0.0` to `1.0` (for model outputs)
@@ -21,6 +22,8 @@ It runs inside Home Assistant (Core / Container / OS). This repository does **no
   - `sensor.printersentry_short_explanation`
   - `binary_sensor.printersentry_unhealthy`
   - `binary_sensor.printersentry_incident_active`
+  - `binary_sensor.printersentry_motion_detected`
+  - `binary_sensor.printersentry_llm_reachable`
   - `camera.printersentry_last_frame`
   - `button.printersentry_force_update`
 - Event on incident trigger: `printersentry_incident`
@@ -35,8 +38,8 @@ It runs inside Home Assistant (Core / Container / OS). This repository does **no
 
 1. Home Assistant with support for custom components.
 1. RTSP camera URL from your printer/camera.
-1. Reachable remote Ollama server from the Home Assistant host/network.
-1. A vision-capable model installed on that Ollama server.
+1. Reachable LLM endpoint from the Home Assistant host/network (`ollama` or `openai` provider).
+1. A vision-capable model available for your selected provider.
 
 On the **remote Ollama host**:
 
@@ -70,8 +73,14 @@ Example model names: `llava`, `llava:13b`, or another vision-capable model avail
    - `ollama_base_url` (example: `http://ollama-host:11434`)
    - `ollama_model`
 1. Optionally tune advanced fields:
+   - `llm_provider` (`ollama` or `openai`)
    - `check_interval_sec` (default `2`)
    - `ollama_timeout_sec` (default `30`)
+   - `openai_base_url` (default `https://api.openai.com`)
+   - `openai_model` (default `gpt-4o-mini`)
+   - `openai_api_key` (required only when provider is `openai`)
+   - `motion_detection_enabled` (default `true`)
+   - `motion_threshold` (default `8.0`)
    - `history_size` (default `200`)
    - `unhealthy_consecutive_threshold` (default `3`)
    - `max_backoff_sec` (default `60`)
@@ -140,6 +149,12 @@ These services do not control hardware. They only log and fire a stub event.
 - Confirm `ollama_base_url` is reachable from Home Assistant.
 - Confirm model exists on remote host (`ollama list` or `ollama pull <model>`).
 - Increase `ollama_timeout_sec` for larger models.
+
+### OpenAI/API provider issues
+
+- Ensure `llm_provider` is `openai`.
+- Confirm `openai_base_url`, `openai_model`, and `openai_api_key`.
+- Check `binary_sensor.printersentry_llm_reachable` and status attributes for reachability.
 
 ### JSON parsing failures
 

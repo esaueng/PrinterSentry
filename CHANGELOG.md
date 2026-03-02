@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 - 2026-03-01
+
+- Added motion-gated inference so LLM calls are skipped when no motion is detected
+- Added `binary_sensor.printersentry_motion_detected`
+- Added `binary_sensor.printersentry_llm_reachable`
+- Added provider support for `ollama` and `openai` APIs via config/options flow
+- Added OpenAI settings (`openai_base_url`, `openai_model`, `openai_api_key`)
+- Added motion settings (`motion_detection_enabled`, `motion_threshold`)
+- Added `llm_reachable`, `llm_provider`, and motion fields to coordinator state/history/diagnostics
+
 ## 0.1.6 - 2026-03-01
 
 - CI/hassfest: sorted `manifest.json` keys to required order

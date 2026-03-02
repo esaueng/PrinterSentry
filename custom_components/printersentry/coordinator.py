@@ -6,6 +6,7 @@ import asyncio
 import base64
 from collections import deque
 from datetime import datetime, timedelta
+from io import BytesIO
 import logging
 import random
 import subprocess
@@ -26,26 +27,39 @@ from .const import (
     CONF_CAPTURE_METHOD,
     CONF_CHECK_INTERVAL_SEC,
     CONF_HISTORY_SIZE,
+    CONF_LLM_PROVIDER,
     CONF_MAX_BACKOFF_SEC,
     CONF_MIN_NOTIFICATION_INTERVAL_SEC,
+    CONF_MOTION_DETECTION_ENABLED,
+    CONF_MOTION_THRESHOLD,
     CONF_NOTIFY_ON_INCIDENT,
     CONF_OLLAMA_BASE_URL,
     CONF_OLLAMA_MODEL,
     CONF_OLLAMA_TIMEOUT_SEC,
+    CONF_OPENAI_API_KEY,
+    CONF_OPENAI_BASE_URL,
+    CONF_OPENAI_MODEL,
     CONF_RTSP_URL,
     CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD,
     DEFAULT_CAPTURE_METHOD,
     DEFAULT_CHECK_INTERVAL_SEC,
     DEFAULT_HISTORY_SIZE,
+    DEFAULT_LLM_PROVIDER,
     DEFAULT_MAX_BACKOFF_SEC,
     DEFAULT_MIN_NOTIFICATION_INTERVAL_SEC,
+    DEFAULT_MOTION_DETECTION_ENABLED,
+    DEFAULT_MOTION_THRESHOLD,
     DEFAULT_NAME,
     DEFAULT_NOTIFY_ON_INCIDENT,
+    DEFAULT_OPENAI_BASE_URL,
+    DEFAULT_OPENAI_MODEL,
     DEFAULT_OLLAMA_TIMEOUT_SEC,
     DEFAULT_UNHEALTHY_CONSECUTIVE_THRESHOLD,
     DOMAIN,
     EVENT_INCIDENT,
     INVALID_JSON_RETRY_COUNT,
+    LLM_PROVIDER_OLLAMA,
+    LLM_PROVIDER_OPENAI,
     MAX_HTTP_RETRIES,
     STATUS_UNKNOWN,
     STORAGE_KEY_PREFIX,
@@ -64,8 +78,8 @@ from .logic import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class RetryableOllamaError(Exception):
-    """Raised for retryable Ollama failures."""
+class RetryableLLMError(Exception):
+    """Raised for retryable LLM transport failures."""
 
 
 class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -92,6 +106,10 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_notification_time: datetime | None = None
         self._capture_backoff_until: datetime | None = None
         self._capture_backoff_sec = 0
+        self._motion_detected = False
+        self._motion_score: float | None = None
+        self._previous_motion_signature: list[int] | None = None
+        self._llm_reachable: bool | None = None
 
         self._read_entry_options()
 
@@ -127,6 +145,10 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._capture_backoff_until
             else None,
             "capture_backoff_sec": self._capture_backoff_sec,
+            "motion_detected": self._motion_detected,
+            "motion_score": self._motion_score,
+            "llm_reachable": self._llm_reachable,
+            "llm_provider": self.llm_provider,
         }
 
     def _read_entry_options(self) -> None:
@@ -141,6 +163,30 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             options.get(CONF_OLLAMA_BASE_URL, data[CONF_OLLAMA_BASE_URL])
         ).rstrip("/")
         self.ollama_model = str(options.get(CONF_OLLAMA_MODEL, data[CONF_OLLAMA_MODEL]))
+        self.llm_provider = str(
+            options.get(
+                CONF_LLM_PROVIDER,
+                data.get(CONF_LLM_PROVIDER, DEFAULT_LLM_PROVIDER),
+            )
+        )
+        self.openai_base_url = str(
+            options.get(
+                CONF_OPENAI_BASE_URL,
+                data.get(CONF_OPENAI_BASE_URL, DEFAULT_OPENAI_BASE_URL),
+            )
+        ).rstrip("/")
+        self.openai_model = str(
+            options.get(
+                CONF_OPENAI_MODEL,
+                data.get(CONF_OPENAI_MODEL, DEFAULT_OPENAI_MODEL),
+            )
+        )
+        self.openai_api_key = str(
+            options.get(
+                CONF_OPENAI_API_KEY,
+                data.get(CONF_OPENAI_API_KEY, ""),
+            )
+        )
 
         self.check_interval_sec = int(
             options.get(
@@ -196,6 +242,23 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
             )
         )
+        self.motion_detection_enabled = bool(
+            options.get(
+                CONF_MOTION_DETECTION_ENABLED,
+                data.get(
+                    CONF_MOTION_DETECTION_ENABLED,
+                    DEFAULT_MOTION_DETECTION_ENABLED,
+                ),
+            )
+        )
+        self.motion_threshold = float(
+            options.get(
+                CONF_MOTION_THRESHOLD,
+                data.get(CONF_MOTION_THRESHOLD, DEFAULT_MOTION_THRESHOLD),
+            )
+        )
+        if self.llm_provider not in {LLM_PROVIDER_OLLAMA, LLM_PROVIDER_OPENAI}:
+            self.llm_provider = LLM_PROVIDER_OLLAMA
 
     async def async_initialize(self) -> None:
         """Restore persisted state."""
@@ -243,6 +306,15 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if self._history:
             latest = self._history[-1]
+            self._motion_detected = bool(latest.get("motion_detected", False))
+            motion_score = latest.get("motion_score")
+            self._motion_score = (
+                float(motion_score) if isinstance(motion_score, (int, float)) else None
+            )
+            llm_reachable = latest.get("llm_reachable")
+            self._llm_reachable = (
+                bool(llm_reachable) if isinstance(llm_reachable, bool) else None
+            )
             self.data = self._default_state("Restored from history")
             self.data.update(
                 {
@@ -251,6 +323,10 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "reason": latest.get("reason", ""),
                     "short_explanation": latest.get("short_explanation", ""),
                     "signals": latest.get("signals", {}),
+                    "motion_detected": self._motion_detected,
+                    "motion_score": self._motion_score,
+                    "llm_reachable": self._llm_reachable,
+                    "llm_provider": self.llm_provider,
                     "last_update": latest.get("timestamp"),
                     "last_frame_time": latest.get("frame_time"),
                     "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
@@ -294,6 +370,10 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "supports_failed_detected": False,
                 "print_missing_detected": False,
             },
+            "motion_detected": False,
+            "motion_score": None,
+            "llm_reachable": None,
+            "llm_provider": self.llm_provider,
             "last_update": None,
             "last_frame_time": None,
             "consecutive_unhealthy_count": 0,
@@ -349,6 +429,26 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             result = unknown_result(f"Frame capture failed: {err}")
             return await self._async_finalize_cycle(result, now)
 
+        (
+            self._motion_detected,
+            self._motion_score,
+            self._previous_motion_signature,
+        ) = await self.hass.async_add_executor_job(
+            _detect_motion_and_signature,
+            self._previous_motion_signature,
+            frame,
+            self.motion_threshold,
+        )
+
+        if self.motion_detection_enabled and not self._motion_detected:
+            _LOGGER.debug(
+                "No motion detected for %s, skipping LLM inference",
+                self.integration_name,
+            )
+            result = unknown_result("No motion detected; inference skipped")
+            result.short_explanation = "No motion detected"
+            return await self._async_finalize_cycle(result, now)
+
         result = await self._async_infer_frame(frame)
         return await self._async_finalize_cycle(result, now)
 
@@ -371,7 +471,11 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Run inference and strict parse with one invalid-JSON retry."""
         for parse_attempt in range(INVALID_JSON_RETRY_COUNT + 1):
             try:
-                model_text = await self._async_ollama_chat(frame)
+                if self.llm_provider == LLM_PROVIDER_OPENAI:
+                    model_text = await self._async_openai_chat(frame)
+                else:
+                    model_text = await self._async_ollama_chat(frame)
+                self._llm_reachable = True
                 return parse_model_output(model_text)
             except ValueError as err:
                 if parse_attempt < INVALID_JSON_RETRY_COUNT:
@@ -385,12 +489,13 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 _LOGGER.error("Model output parsing failed: %s", err)
                 return unknown_result(f"Invalid model JSON response: {err}")
             except Exception as err:  # noqa: BLE001
+                self._llm_reachable = False
                 _LOGGER.error(
-                    "Ollama inference failed for %s: %s",
+                    "LLM inference failed for %s: %s",
                     self.integration_name,
                     err,
                 )
-                return unknown_result(f"Ollama inference failed: {err}")
+                return unknown_result(f"LLM inference failed: {err}")
 
         return unknown_result("Inference failed")
 
@@ -420,7 +525,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             try:
                 async with self._session.post(url, json=payload, timeout=timeout) as response:
                     if response.status >= 500:
-                        raise RetryableOllamaError(f"HTTP {response.status}")
+                        raise RetryableLLMError(f"HTTP {response.status}")
                     if response.status >= 400:
                         body_text = await response.text()
                         raise RuntimeError(
@@ -444,7 +549,7 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             except (
                 asyncio.TimeoutError,
                 aiohttp.ClientError,
-                RetryableOllamaError,
+                RetryableLLMError,
             ) as err:
                 if attempt >= MAX_HTTP_RETRIES - 1:
                     raise RuntimeError("Max retries reached for Ollama request") from err
@@ -460,6 +565,93 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await asyncio.sleep(delay)
 
         raise RuntimeError("Unable to call Ollama")
+
+    async def _async_openai_chat(self, frame: bytes) -> str:
+        """Call OpenAI-compatible chat completions endpoint."""
+        url = f"{self.openai_base_url}/v1/chat/completions"
+        frame_base64 = base64.b64encode(frame).decode("ascii")
+
+        headers: dict[str, str] = {}
+        if self.openai_api_key:
+            headers["Authorization"] = f"Bearer {self.openai_api_key}"
+
+        payload = {
+            "model": self.openai_model,
+            "temperature": 0,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": USER_PROMPT},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{frame_base64}",
+                            },
+                        },
+                    ],
+                },
+            ],
+        }
+
+        timeout = aiohttp.ClientTimeout(total=self.ollama_timeout_sec)
+
+        for attempt in range(MAX_HTTP_RETRIES):
+            try:
+                async with self._session.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=timeout,
+                ) as response:
+                    if response.status >= 500:
+                        raise RetryableLLMError(f"HTTP {response.status}")
+                    if response.status >= 400:
+                        body_text = await response.text()
+                        raise RuntimeError(
+                            f"HTTP {response.status}: {body_text[:400]}"
+                        )
+
+                    body = await response.json(content_type=None)
+                    if not isinstance(body, dict):
+                        raise RuntimeError("Unexpected OpenAI response body")
+
+                    choices = body.get("choices")
+                    if not isinstance(choices, list) or not choices:
+                        raise RuntimeError("Missing choices in OpenAI response")
+                    first = choices[0]
+                    if not isinstance(first, dict):
+                        raise RuntimeError("Invalid choices[0] in OpenAI response")
+                    message = first.get("message")
+                    if not isinstance(message, dict):
+                        raise RuntimeError("Missing message in OpenAI response")
+                    content = message.get("content")
+                    parsed_content = _extract_openai_content(content)
+                    if not parsed_content:
+                        raise RuntimeError("Missing message content in OpenAI response")
+                    return parsed_content
+
+            except (
+                asyncio.TimeoutError,
+                aiohttp.ClientError,
+                RetryableLLMError,
+            ) as err:
+                if attempt >= MAX_HTTP_RETRIES - 1:
+                    raise RuntimeError("Max retries reached for OpenAI request") from err
+                base_delay = min(self.max_backoff_sec, 2**attempt)
+                delay = base_delay + random.uniform(0, max(0.1, base_delay * 0.3))
+                _LOGGER.warning(
+                    "Retryable OpenAI call failure (attempt %s/%s): %s. Retrying in %.1fs",
+                    attempt + 1,
+                    MAX_HTTP_RETRIES,
+                    err,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+        raise RuntimeError("Unable to call OpenAI")
 
     async def _async_finalize_cycle(
         self,
@@ -490,6 +682,9 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "short_explanation": result.short_explanation,
                     "timestamp": now.isoformat(),
                     "signals": result.signals,
+                    "motion_detected": self._motion_detected,
+                    "llm_reachable": self._llm_reachable,
+                    "llm_provider": self.llm_provider,
                 },
             )
             _LOGGER.warning(
@@ -524,6 +719,10 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "reason": result.reason,
             "short_explanation": result.short_explanation,
             "signals": result.signals,
+            "motion_detected": self._motion_detected,
+            "motion_score": self._motion_score,
+            "llm_reachable": self._llm_reachable,
+            "llm_provider": self.llm_provider,
             "last_update": now.isoformat(),
             "last_frame_time": self._last_frame_time.isoformat()
             if self._last_frame_time
@@ -545,6 +744,10 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "reason": result.reason,
             "short_explanation": result.short_explanation,
             "signals": result.signals,
+            "motion_detected": self._motion_detected,
+            "motion_score": self._motion_score,
+            "llm_reachable": self._llm_reachable,
+            "llm_provider": self.llm_provider,
             "frame_time": state["last_frame_time"],
             "incident_active": self._incident_active,
             "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
@@ -574,6 +777,56 @@ class PrinterSentryCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             title="PrinterSentry Alert: Print Unhealthy",
             notification_id=f"{DOMAIN}_{self.config_entry.entry_id}_incident",
         )
+
+
+def _extract_openai_content(content: Any) -> str:
+    """Normalize OpenAI message content payload into plain text."""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        text_parts: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") in {"text", "output_text"}:
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    text_parts.append(text.strip())
+        return "\n".join(text_parts).strip()
+    return ""
+
+
+def _motion_signature(frame: bytes) -> list[int]:
+    """Compute a compact grayscale signature for motion checks."""
+    from PIL import Image  # pylint: disable=import-outside-toplevel
+
+    with Image.open(BytesIO(frame)) as img:
+        grayscale = img.convert("L").resize((32, 32))
+        return list(grayscale.getdata())
+
+
+def _detect_motion_and_signature(
+    previous_signature: list[int] | None,
+    frame: bytes,
+    threshold: float,
+) -> tuple[bool, float | None, list[int] | None]:
+    """Compute motion state from current frame and previous signature."""
+    try:
+        current_signature = _motion_signature(frame)
+    except Exception:  # noqa: BLE001
+        # If motion detection fails, default to inference enabled.
+        return True, None, previous_signature
+
+    if not previous_signature:
+        return True, None, current_signature
+
+    if len(previous_signature) != len(current_signature):
+        return True, None, current_signature
+
+    mean_abs_diff = sum(
+        abs(curr - prev) for curr, prev in zip(current_signature, previous_signature)
+    ) / len(current_signature)
+    return mean_abs_diff >= threshold, float(mean_abs_diff), current_signature
 
 
 def _capture_frame_ffmpeg(rtsp_url: str, timeout: int) -> bytes:

@@ -11,10 +11,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_USERNAME
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_OLLAMA_BASE_URL, CONF_RTSP_URL, DOMAIN
+from .const import (
+    CONF_OLLAMA_BASE_URL,
+    CONF_OPENAI_API_KEY,
+    CONF_OPENAI_BASE_URL,
+    CONF_RTSP_URL,
+    DOMAIN,
+)
 from .coordinator import PrinterSentryCoordinator
 
-REDACT_KEYS = {CONF_USERNAME}
+REDACT_KEYS = {CONF_USERNAME, CONF_OPENAI_API_KEY}
 
 
 def _redact_url_credentials(value: str) -> str:
@@ -30,7 +36,7 @@ def _redact_url_credentials(value: str) -> str:
 
 def _sanitize_config_dict(data: dict[str, Any]) -> dict[str, Any]:
     sanitized = deepcopy(data)
-    for key in (CONF_RTSP_URL, CONF_OLLAMA_BASE_URL):
+    for key in (CONF_RTSP_URL, CONF_OLLAMA_BASE_URL, CONF_OPENAI_BASE_URL):
         value = sanitized.get(key)
         if isinstance(value, str):
             sanitized[key] = _redact_url_credentials(value)

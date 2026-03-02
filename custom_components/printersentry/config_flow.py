@@ -27,25 +27,38 @@ from .const import (
     CONF_CAPTURE_METHOD,
     CONF_CHECK_INTERVAL_SEC,
     CONF_HISTORY_SIZE,
+    CONF_LLM_PROVIDER,
     CONF_MAX_BACKOFF_SEC,
     CONF_MIN_NOTIFICATION_INTERVAL_SEC,
+    CONF_MOTION_DETECTION_ENABLED,
+    CONF_MOTION_THRESHOLD,
     CONF_NAME,
     CONF_NOTIFY_ON_INCIDENT,
     CONF_OLLAMA_BASE_URL,
     CONF_OLLAMA_MODEL,
     CONF_OLLAMA_TIMEOUT_SEC,
+    CONF_OPENAI_API_KEY,
+    CONF_OPENAI_BASE_URL,
+    CONF_OPENAI_MODEL,
     CONF_RTSP_URL,
     CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD,
     DEFAULT_CAPTURE_METHOD,
     DEFAULT_CHECK_INTERVAL_SEC,
     DEFAULT_HISTORY_SIZE,
+    DEFAULT_LLM_PROVIDER,
     DEFAULT_MAX_BACKOFF_SEC,
     DEFAULT_MIN_NOTIFICATION_INTERVAL_SEC,
+    DEFAULT_MOTION_DETECTION_ENABLED,
+    DEFAULT_MOTION_THRESHOLD,
     DEFAULT_NAME,
     DEFAULT_NOTIFY_ON_INCIDENT,
+    DEFAULT_OPENAI_BASE_URL,
+    DEFAULT_OPENAI_MODEL,
     DEFAULT_OLLAMA_TIMEOUT_SEC,
     DEFAULT_UNHEALTHY_CONSECUTIVE_THRESHOLD,
     DOMAIN,
+    LLM_PROVIDER_OLLAMA,
+    LLM_PROVIDER_OPENAI,
 )
 
 
@@ -59,6 +72,28 @@ def _build_schema(defaults: dict[str, Any]) -> vol.Schema:
                 default=defaults[CONF_OLLAMA_BASE_URL],
             ): TextSelector(),
             vol.Required(CONF_OLLAMA_MODEL, default=defaults[CONF_OLLAMA_MODEL]): TextSelector(),
+            vol.Required(
+                CONF_LLM_PROVIDER,
+                default=defaults[CONF_LLM_PROVIDER],
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[LLM_PROVIDER_OLLAMA, LLM_PROVIDER_OPENAI],
+                    mode=SelectSelectorMode.DROPDOWN,
+                    translation_key=CONF_LLM_PROVIDER,
+                )
+            ),
+            vol.Required(
+                CONF_OPENAI_BASE_URL,
+                default=defaults[CONF_OPENAI_BASE_URL],
+            ): TextSelector(),
+            vol.Required(
+                CONF_OPENAI_MODEL,
+                default=defaults[CONF_OPENAI_MODEL],
+            ): TextSelector(),
+            vol.Required(
+                CONF_OPENAI_API_KEY,
+                default=defaults[CONF_OPENAI_API_KEY],
+            ): TextSelector(),
             vol.Required(
                 CONF_CHECK_INTERVAL_SEC,
                 default=defaults[CONF_CHECK_INTERVAL_SEC],
@@ -110,6 +145,16 @@ def _build_schema(defaults: dict[str, Any]) -> vol.Schema:
             ): NumberSelector(
                 NumberSelectorConfig(min=0, max=86400, mode=NumberSelectorMode.BOX)
             ),
+            vol.Required(
+                CONF_MOTION_DETECTION_ENABLED,
+                default=defaults[CONF_MOTION_DETECTION_ENABLED],
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_MOTION_THRESHOLD,
+                default=defaults[CONF_MOTION_THRESHOLD],
+            ): NumberSelector(
+                NumberSelectorConfig(min=0.1, max=255.0, mode=NumberSelectorMode.BOX)
+            ),
         }
     )
 
@@ -134,6 +179,27 @@ def _validate_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("invalid_model")
     data[CONF_OLLAMA_MODEL] = model
 
+    provider = str(data[CONF_LLM_PROVIDER]).strip().lower()
+    if provider not in {LLM_PROVIDER_OLLAMA, LLM_PROVIDER_OPENAI}:
+        raise ValueError("invalid_llm_provider")
+    data[CONF_LLM_PROVIDER] = provider
+
+    openai_base = str(data[CONF_OPENAI_BASE_URL]).strip().rstrip("/")
+    parsed_openai = urlparse(openai_base)
+    if parsed_openai.scheme not in {"http", "https"} or not parsed_openai.netloc:
+        raise ValueError("invalid_openai_url")
+    data[CONF_OPENAI_BASE_URL] = openai_base
+
+    openai_model = str(data[CONF_OPENAI_MODEL]).strip()
+    if not openai_model:
+        raise ValueError("invalid_openai_model")
+    data[CONF_OPENAI_MODEL] = openai_model
+
+    openai_api_key = str(data[CONF_OPENAI_API_KEY]).strip()
+    if provider == LLM_PROVIDER_OPENAI and not openai_api_key:
+        raise ValueError("missing_openai_api_key")
+    data[CONF_OPENAI_API_KEY] = openai_api_key
+
     name = str(data[CONF_NAME]).strip() or DEFAULT_NAME
     data[CONF_NAME] = name
 
@@ -147,6 +213,9 @@ def _validate_user_input(user_input: dict[str, Any]) -> dict[str, Any]:
     )
     for key in numeric_fields:
         data[key] = int(data[key])
+
+    data[CONF_MOTION_THRESHOLD] = float(data[CONF_MOTION_THRESHOLD])
+    data[CONF_MOTION_DETECTION_ENABLED] = bool(data[CONF_MOTION_DETECTION_ENABLED])
 
     data[CONF_NOTIFY_ON_INCIDENT] = bool(data[CONF_NOTIFY_ON_INCIDENT])
 
@@ -174,6 +243,10 @@ class PrinterSentryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_RTSP_URL: "rtsp://",
             CONF_OLLAMA_BASE_URL: "http://ollama-host:11434",
             CONF_OLLAMA_MODEL: "llava",
+            CONF_LLM_PROVIDER: DEFAULT_LLM_PROVIDER,
+            CONF_OPENAI_BASE_URL: DEFAULT_OPENAI_BASE_URL,
+            CONF_OPENAI_MODEL: DEFAULT_OPENAI_MODEL,
+            CONF_OPENAI_API_KEY: "",
             CONF_CHECK_INTERVAL_SEC: DEFAULT_CHECK_INTERVAL_SEC,
             CONF_OLLAMA_TIMEOUT_SEC: DEFAULT_OLLAMA_TIMEOUT_SEC,
             CONF_HISTORY_SIZE: DEFAULT_HISTORY_SIZE,
@@ -182,6 +255,8 @@ class PrinterSentryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_CAPTURE_METHOD: DEFAULT_CAPTURE_METHOD,
             CONF_NOTIFY_ON_INCIDENT: DEFAULT_NOTIFY_ON_INCIDENT,
             CONF_MIN_NOTIFICATION_INTERVAL_SEC: DEFAULT_MIN_NOTIFICATION_INTERVAL_SEC,
+            CONF_MOTION_DETECTION_ENABLED: DEFAULT_MOTION_DETECTION_ENABLED,
+            CONF_MOTION_THRESHOLD: DEFAULT_MOTION_THRESHOLD,
         }
 
         if user_input is not None:
@@ -191,7 +266,7 @@ class PrinterSentryConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = str(err)
             else:
                 unique_source = (
-                    f"{validated[CONF_RTSP_URL]}::{validated[CONF_OLLAMA_BASE_URL]}"
+                    f"{validated[CONF_RTSP_URL]}::{validated[CONF_LLM_PROVIDER]}::{validated[CONF_OLLAMA_BASE_URL]}::{validated[CONF_OPENAI_BASE_URL]}"
                 )
                 unique_id = hashlib.sha256(unique_source.encode("utf-8")).hexdigest()
                 await self.async_set_unique_id(
@@ -242,6 +317,22 @@ class PrinterSentryOptionsFlow(config_entries.OptionsFlow):
                 CONF_OLLAMA_MODEL,
                 self._entry.data[CONF_OLLAMA_MODEL],
             ),
+            CONF_LLM_PROVIDER: self._entry.options.get(
+                CONF_LLM_PROVIDER,
+                self._entry.data.get(CONF_LLM_PROVIDER, DEFAULT_LLM_PROVIDER),
+            ),
+            CONF_OPENAI_BASE_URL: self._entry.options.get(
+                CONF_OPENAI_BASE_URL,
+                self._entry.data.get(CONF_OPENAI_BASE_URL, DEFAULT_OPENAI_BASE_URL),
+            ),
+            CONF_OPENAI_MODEL: self._entry.options.get(
+                CONF_OPENAI_MODEL,
+                self._entry.data.get(CONF_OPENAI_MODEL, DEFAULT_OPENAI_MODEL),
+            ),
+            CONF_OPENAI_API_KEY: self._entry.options.get(
+                CONF_OPENAI_API_KEY,
+                self._entry.data.get(CONF_OPENAI_API_KEY, ""),
+            ),
             CONF_CHECK_INTERVAL_SEC: self._entry.options.get(
                 CONF_CHECK_INTERVAL_SEC,
                 self._entry.data.get(CONF_CHECK_INTERVAL_SEC, DEFAULT_CHECK_INTERVAL_SEC),
@@ -279,6 +370,17 @@ class PrinterSentryOptionsFlow(config_entries.OptionsFlow):
                     CONF_MIN_NOTIFICATION_INTERVAL_SEC,
                     DEFAULT_MIN_NOTIFICATION_INTERVAL_SEC,
                 ),
+            ),
+            CONF_MOTION_DETECTION_ENABLED: self._entry.options.get(
+                CONF_MOTION_DETECTION_ENABLED,
+                self._entry.data.get(
+                    CONF_MOTION_DETECTION_ENABLED,
+                    DEFAULT_MOTION_DETECTION_ENABLED,
+                ),
+            ),
+            CONF_MOTION_THRESHOLD: self._entry.options.get(
+                CONF_MOTION_THRESHOLD,
+                self._entry.data.get(CONF_MOTION_THRESHOLD, DEFAULT_MOTION_THRESHOLD),
             ),
         }
 
