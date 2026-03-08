@@ -41,6 +41,7 @@ from .const import (
     CONF_OPENAI_MODEL,
     CONF_RTSP_URL,
     CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+    CONF_VISION_PROMPT,
     DEFAULT_CAPTURE_METHOD,
     DEFAULT_CHECK_INTERVAL_SEC,
     DEFAULT_HISTORY_SIZE,
@@ -55,6 +56,7 @@ from .const import (
     DEFAULT_OPENAI_MODEL,
     DEFAULT_OLLAMA_TIMEOUT_SEC,
     DEFAULT_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+    DEFAULT_VISION_PROMPT,
     DOMAIN,
     EVENT_INCIDENT,
     INVALID_JSON_RETRY_COUNT,
@@ -64,7 +66,6 @@ from .const import (
     STATUS_UNKNOWN,
     STORAGE_KEY_PREFIX,
     STORAGE_VERSION,
-    SYSTEM_PROMPT,
     USER_PROMPT,
 )
 from .logic import (
@@ -156,6 +157,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "motion_score": self._motion_score,
             "llm_reachable": self._llm_reachable,
             "llm_provider": self.llm_provider,
+            "vision_prompt_length": len(self.vision_prompt),
             "last_frame_time": self._last_frame_time.isoformat()
             if self._last_frame_time
             else None,
@@ -200,6 +202,14 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data.get(CONF_OPENAI_API_KEY, ""),
             )
         )
+        self.vision_prompt = str(
+            options.get(
+                CONF_VISION_PROMPT,
+                data.get(CONF_VISION_PROMPT, DEFAULT_VISION_PROMPT),
+            )
+        ).strip()
+        if not self.vision_prompt:
+            self.vision_prompt = DEFAULT_VISION_PROMPT
 
         self.check_interval_sec = int(
             options.get(
@@ -529,7 +539,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "stream": False,
             "format": "json",
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self.vision_prompt},
                 {
                     "role": "user",
                     "content": USER_PROMPT,
@@ -600,7 +610,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "temperature": 0,
             "response_format": {"type": "json_object"},
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": self.vision_prompt},
                 {
                     "role": "user",
                     "content": [

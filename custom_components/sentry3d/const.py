@@ -24,6 +24,7 @@ CONF_LLM_PROVIDER = "llm_provider"
 CONF_OPENAI_BASE_URL = "openai_base_url"
 CONF_OPENAI_MODEL = "openai_model"
 CONF_OPENAI_API_KEY = "openai_api_key"
+CONF_VISION_PROMPT = "vision_prompt"
 
 CAPTURE_METHOD_FFMPEG = "ffmpeg"
 CAPTURE_METHOD_OPENCV = "opencv"
@@ -127,3 +128,5 @@ REQUIRED JSON SCHEMA:
 }"""
 
 USER_PROMPT = "Analyze this printer camera frame and return JSON only."
+
+DEFAULT_VISION_PROMPT = SYSTEM_PROMPT

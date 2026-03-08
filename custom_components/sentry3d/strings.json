@@ -17,6 +17,7 @@
         "data": {
           "ollama_base_url": "Ollama Base URL",
           "ollama_model": "Ollama Model",
+          "vision_prompt": "Vision Prompt",
           "check_interval_sec": "Check Interval (seconds)",
           "ollama_timeout_sec": "Ollama Timeout (seconds)",
           "history_size": "History Size",
@@ -36,6 +37,7 @@
           "openai_base_url": "OpenAI Base URL",
           "openai_model": "OpenAI Model",
           "openai_api_key": "OpenAI API Key",
+          "vision_prompt": "Vision Prompt",
           "check_interval_sec": "Check Interval (seconds)",
           "ollama_timeout_sec": "Ollama Timeout (seconds)",
           "history_size": "History Size",
@@ -58,7 +60,8 @@
       "invalid_motion_threshold": "Motion threshold must be greater than zero",
       "invalid_openai_url": "OpenAI Base URL must be a valid http:// or https:// URL",
       "invalid_openai_model": "OpenAI model is required",
-      "missing_openai_api_key": "OpenAI API key is required when provider is OpenAI"
+      "missing_openai_api_key": "OpenAI API key is required when provider is OpenAI",
+      "missing_vision_prompt": "Vision prompt is required"
     }
   },
   "options": {
@@ -78,6 +81,7 @@
         "data": {
           "ollama_base_url": "Ollama Base URL",
           "ollama_model": "Ollama Model",
+          "vision_prompt": "Vision Prompt",
           "check_interval_sec": "Check Interval (seconds)",
           "ollama_timeout_sec": "Ollama Timeout (seconds)",
           "history_size": "History Size",
@@ -97,6 +101,7 @@
           "openai_base_url": "OpenAI Base URL",
           "openai_model": "OpenAI Model",
           "openai_api_key": "OpenAI API Key",
+          "vision_prompt": "Vision Prompt",
           "check_interval_sec": "Check Interval (seconds)",
           "ollama_timeout_sec": "Ollama Timeout (seconds)",
           "history_size": "History Size",
@@ -119,7 +124,8 @@
       "invalid_motion_threshold": "Motion threshold must be greater than zero",
       "invalid_openai_url": "OpenAI Base URL must be a valid http:// or https:// URL",
       "invalid_openai_model": "OpenAI model is required",
-      "missing_openai_api_key": "OpenAI API key is required when provider is OpenAI"
+      "missing_openai_api_key": "OpenAI API key is required when provider is OpenAI",
+      "missing_vision_prompt": "Vision prompt is required"
     }
   },
   "selector": {

@@ -19,6 +19,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
     TextSelector,
+    TextSelectorConfig,
 )
 
 from .const import (
@@ -42,6 +43,7 @@ from .const import (
     CONF_OPENAI_MODEL,
     CONF_RTSP_URL,
     CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+    CONF_VISION_PROMPT,
     DEFAULT_CAPTURE_METHOD,
     DEFAULT_CHECK_INTERVAL_SEC,
     DEFAULT_HISTORY_SIZE,
@@ -56,6 +58,7 @@ from .const import (
     DEFAULT_OPENAI_MODEL,
     DEFAULT_OLLAMA_TIMEOUT_SEC,
     DEFAULT_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+    DEFAULT_VISION_PROMPT,
     DOMAIN,
     LLM_PROVIDER_OLLAMA,
     LLM_PROVIDER_OPENAI,
@@ -72,6 +75,7 @@ def _default_values() -> dict[str, Any]:
         CONF_OPENAI_BASE_URL: DEFAULT_OPENAI_BASE_URL,
         CONF_OPENAI_MODEL: DEFAULT_OPENAI_MODEL,
         CONF_OPENAI_API_KEY: "",
+        CONF_VISION_PROMPT: DEFAULT_VISION_PROMPT,
         CONF_CHECK_INTERVAL_SEC: DEFAULT_CHECK_INTERVAL_SEC,
         CONF_OLLAMA_TIMEOUT_SEC: DEFAULT_OLLAMA_TIMEOUT_SEC,
         CONF_HISTORY_SIZE: DEFAULT_HISTORY_SIZE,
@@ -183,6 +187,10 @@ def _build_ollama_schema(defaults: dict[str, Any]) -> vol.Schema:
             CONF_OLLAMA_MODEL,
             default=defaults[CONF_OLLAMA_MODEL],
         ): TextSelector(),
+        vol.Required(
+            CONF_VISION_PROMPT,
+            default=defaults[CONF_VISION_PROMPT],
+        ): TextSelector(TextSelectorConfig(multiline=True)),
     }
     fields.update(_runtime_schema_fields(defaults))
     return vol.Schema(fields)
@@ -202,6 +210,10 @@ def _build_openai_schema(defaults: dict[str, Any]) -> vol.Schema:
             CONF_OPENAI_API_KEY,
             default=defaults[CONF_OPENAI_API_KEY],
         ): TextSelector(),
+        vol.Required(
+            CONF_VISION_PROMPT,
+            default=defaults[CONF_VISION_PROMPT],
+        ): TextSelector(TextSelectorConfig(multiline=True)),
     }
     fields.update(_runtime_schema_fields(defaults))
     return vol.Schema(fields)
@@ -270,6 +282,11 @@ def _validate_ollama_input(user_input: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("invalid_model")
     data[CONF_OLLAMA_MODEL] = model
 
+    vision_prompt = str(data[CONF_VISION_PROMPT]).strip()
+    if not vision_prompt:
+        raise ValueError("missing_vision_prompt")
+    data[CONF_VISION_PROMPT] = vision_prompt
+
     return data
 
 
@@ -291,6 +308,11 @@ def _validate_openai_input(user_input: dict[str, Any]) -> dict[str, Any]:
     if not openai_api_key:
         raise ValueError("missing_openai_api_key")
     data[CONF_OPENAI_API_KEY] = openai_api_key
+
+    vision_prompt = str(data[CONF_VISION_PROMPT]).strip()
+    if not vision_prompt:
+        raise ValueError("missing_vision_prompt")
+    data[CONF_VISION_PROMPT] = vision_prompt
 
     return data
 

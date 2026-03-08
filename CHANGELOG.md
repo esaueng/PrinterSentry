@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.2 - 2026-03-07
+
+- Added editable `vision_prompt` field to the Home Assistant config flow and options flow
+- Stored the configured prompt in config/options and used it for Ollama/OpenAI inference requests
+
 ## 0.3.1 - 2026-03-03
 
 - Config/options flow now uses a base step plus provider-specific step:
