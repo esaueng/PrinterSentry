@@ -10,7 +10,7 @@ from custom_components.sentry3d.const import (
     STATUS_HEALTHY,
     STATUS_UNHEALTHY,
 )
-from custom_components.sentry3d.logic import parse_model_output
+from custom_components.sentry3d.logic import parse_model_output, unknown_result
 
 
 VALID_UNHEALTHY = """
@@ -80,8 +80,8 @@ def test_parse_rejects_healthy_with_defect_flags() -> None:
         parse_model_output(json.dumps(invalid))
 
 
-def test_parse_rejects_missing_short_explanation() -> None:
-    invalid = {
+def test_parse_derives_missing_short_explanation() -> None:
+    payload = {
         "status": STATUS_UNHEALTHY,
         "confidence": 0.8,
         "reason": "Visible spaghetti.",
@@ -97,8 +97,8 @@ def test_parse_rejects_missing_short_explanation() -> None:
         },
     }
 
-    with pytest.raises(ValueError):
-        parse_model_output(json.dumps(invalid))
+    result = parse_model_output(json.dumps(payload))
+    assert result.short_explanation == "Visible spaghetti"
 
 
 def test_parse_valid_empty() -> None:
@@ -167,3 +167,8 @@ def test_parse_rejects_invalid_focus_region_bounds() -> None:
 
     with pytest.raises(ValueError):
         parse_model_output(json.dumps(payload))
+
+
+def test_unknown_result_derives_short_explanation() -> None:
+    result = unknown_result("Invalid model JSON response: short_explanation missing")
+    assert result.short_explanation == "Invalid model JSON response"

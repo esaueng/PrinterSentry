@@ -50,6 +50,24 @@ class IncidentTransition:
     cleared_incident: bool
 
 
+def _derive_short_explanation(text: str, fallback: str = "Unknown") -> str:
+    """Build a concise UI-friendly summary from a longer message."""
+    normalized = " ".join(text.strip().split())
+    if not normalized:
+        return fallback
+
+    for separator in (":", ";", ".", ",", "\n"):
+        normalized = normalized.split(separator, 1)[0].strip()
+        if normalized:
+            break
+
+    words = normalized.split()
+    if len(words) > 6:
+        normalized = " ".join(words[:6])
+
+    return normalized[:48].strip() or fallback
+
+
 def parse_model_output(raw_text: str) -> InferenceResult:
     """Parse and validate strict JSON output from Ollama."""
     stripped = raw_text.strip()
@@ -85,9 +103,10 @@ def parse_model_output(raw_text: str) -> InferenceResult:
     reason = reason.strip()
 
     short_explanation = payload.get("short_explanation")
-    if not isinstance(short_explanation, str) or not short_explanation.strip():
-        raise ValueError("short_explanation must be a non-empty string")
-    short_explanation = short_explanation.strip()
+    if isinstance(short_explanation, str) and short_explanation.strip():
+        short_explanation = short_explanation.strip()
+    else:
+        short_explanation = _derive_short_explanation(reason)
 
     signals_raw = payload.get("signals")
     if not isinstance(signals_raw, dict):
@@ -163,7 +182,7 @@ def unknown_result(reason: str) -> InferenceResult:
         status=STATUS_UNKNOWN,
         confidence=None,
         reason=reason,
-        short_explanation="No valid result",
+        short_explanation=_derive_short_explanation(reason),
         signals={key: False for key in REQUIRED_SIGNAL_KEYS},
         focus_region=None,
     )

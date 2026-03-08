@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.5 - 2026-03-07
+
+- Derived `short_explanation` from `reason` when the model omits it, instead of failing the whole result
+- Replaced the generic `No valid result` fallback with a short summary of the actual failure reason
+
 ## 0.3.4 - 2026-03-07
 
 - Replaced the default vision prompt with a stricter build-plate-focused inspection prompt
