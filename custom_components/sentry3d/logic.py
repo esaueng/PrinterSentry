@@ -37,6 +37,7 @@ class InferenceResult:
     reason: str
     short_explanation: str
     signals: dict[str, bool]
+    focus_region: dict[str, float] | None
 
 
 @dataclass(slots=True)
@@ -111,12 +112,48 @@ def parse_model_output(raw_text: str) -> InferenceResult:
     if status == STATUS_EMPTY and any(signals.values()):
         raise ValueError("Empty output cannot have any signals set")
 
+    focus_region_raw = payload.get("focus_region")
+    focus_region: dict[str, float] | None
+    if focus_region_raw is None:
+        focus_region = None
+    else:
+        if not isinstance(focus_region_raw, dict):
+            raise ValueError("focus_region must be an object or null")
+        required_region_keys = {"x", "y", "width", "height"}
+        if set(focus_region_raw) != required_region_keys:
+            missing = sorted(required_region_keys - set(focus_region_raw))
+            extra = sorted(set(focus_region_raw) - required_region_keys)
+            raise ValueError(
+                f"focus_region keys mismatch: missing={missing}, extra={extra}"
+            )
+
+        focus_region = {}
+        for key in ("x", "y", "width", "height"):
+            value = focus_region_raw.get(key)
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise ValueError(f"focus_region.{key} must be numeric")
+            value = float(value)
+            if value < 0.0 or value > 1.0:
+                raise ValueError(f"focus_region.{key} must be between 0 and 1")
+            focus_region[key] = value
+
+        if focus_region["width"] <= 0.0 or focus_region["height"] <= 0.0:
+            raise ValueError("focus_region width and height must be greater than 0")
+        if focus_region["x"] + focus_region["width"] > 1.0:
+            raise ValueError("focus_region exceeds image width")
+        if focus_region["y"] + focus_region["height"] > 1.0:
+            raise ValueError("focus_region exceeds image height")
+
+    if status != STATUS_UNHEALTHY and focus_region is not None:
+        raise ValueError("focus_region is only valid for UNHEALTHY results")
+
     return InferenceResult(
         status=status,
         confidence=confidence,
         reason=reason,
         short_explanation=short_explanation,
         signals=signals,
+        focus_region=focus_region,
     )
 
 
@@ -128,6 +165,7 @@ def unknown_result(reason: str) -> InferenceResult:
         reason=reason,
         short_explanation="No valid result",
         signals={key: False for key in REQUIRED_SIGNAL_KEYS},
+        focus_region=None,
     )
 
 

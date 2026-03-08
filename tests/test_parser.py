@@ -19,6 +19,12 @@ VALID_UNHEALTHY = """
   "confidence": 0.83,
   "reason": "Visible spaghetti strands are forming above the part.",
   "short_explanation": "Spaghetti near nozzle",
+  "focus_region": {
+    "x": 0.42,
+    "y": 0.19,
+    "width": 0.21,
+    "height": 0.33
+  },
   "signals": {
     "bed_adhesion_ok": false,
     "spaghetti_detected": true,
@@ -39,6 +45,12 @@ def test_parse_valid_unhealthy() -> None:
     assert "spaghetti" in result.reason.lower()
     assert result.short_explanation == "Spaghetti near nozzle"
     assert result.signals["spaghetti_detected"] is True
+    assert result.focus_region == {
+        "x": 0.42,
+        "y": 0.19,
+        "width": 0.21,
+        "height": 0.33,
+    }
 
 
 def test_parse_rejects_non_json_wrapping() -> None:
@@ -52,6 +64,7 @@ def test_parse_rejects_healthy_with_defect_flags() -> None:
         "confidence": 0.92,
         "reason": "Looks fine.",
         "short_explanation": "Looks stable",
+        "focus_region": None,
         "signals": {
             "bed_adhesion_ok": True,
             "spaghetti_detected": True,
@@ -72,6 +85,7 @@ def test_parse_rejects_missing_short_explanation() -> None:
         "status": STATUS_UNHEALTHY,
         "confidence": 0.8,
         "reason": "Visible spaghetti.",
+        "focus_region": None,
         "signals": {
             "bed_adhesion_ok": False,
             "spaghetti_detected": True,
@@ -93,6 +107,7 @@ def test_parse_valid_empty() -> None:
         "confidence": 0.97,
         "reason": "The build plate is visibly empty.",
         "short_explanation": "No active print",
+        "focus_region": None,
         "signals": {
             "bed_adhesion_ok": False,
             "spaghetti_detected": False,
@@ -107,3 +122,48 @@ def test_parse_valid_empty() -> None:
     result = parse_model_output(json.dumps(payload))
     assert result.status == STATUS_EMPTY
     assert result.short_explanation == "No active print"
+    assert result.focus_region is None
+
+
+def test_parse_rejects_focus_region_for_non_unhealthy() -> None:
+    payload = {
+        "status": STATUS_HEALTHY,
+        "confidence": 0.91,
+        "reason": "The print looks stable.",
+        "short_explanation": "Looks good",
+        "focus_region": {"x": 0.1, "y": 0.2, "width": 0.2, "height": 0.2},
+        "signals": {
+            "bed_adhesion_ok": True,
+            "spaghetti_detected": False,
+            "layer_shift_detected": False,
+            "detached_part_detected": False,
+            "blob_detected": False,
+            "supports_failed_detected": False,
+            "print_missing_detected": False,
+        },
+    }
+
+    with pytest.raises(ValueError):
+        parse_model_output(json.dumps(payload))
+
+
+def test_parse_rejects_invalid_focus_region_bounds() -> None:
+    payload = {
+        "status": STATUS_UNHEALTHY,
+        "confidence": 0.74,
+        "reason": "A blob is visible on the right side.",
+        "short_explanation": "Blob forming",
+        "focus_region": {"x": 0.85, "y": 0.2, "width": 0.3, "height": 0.2},
+        "signals": {
+            "bed_adhesion_ok": False,
+            "spaghetti_detected": False,
+            "layer_shift_detected": False,
+            "detached_part_detected": False,
+            "blob_detected": True,
+            "supports_failed_detected": False,
+            "print_missing_detected": False,
+        },
+    }
+
+    with pytest.raises(ValueError):
+        parse_model_output(json.dumps(payload))

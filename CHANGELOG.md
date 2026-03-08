@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3 - 2026-03-07
+
+- Added optional `focus_region` parsing for unhealthy model responses
+- Camera now serves an annotated preview image with a highlighted concern box and confidence label when available
+- Exposed `focus_region` and `overlay_available` in Home Assistant entity state attributes
+
 ## 0.3.2 - 2026-03-07
 
 - Added editable `vision_prompt` field to the Home Assistant config flow and options flow

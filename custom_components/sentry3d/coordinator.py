@@ -103,6 +103,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_frame_time: datetime | None = None
         self._last_llm_frame: bytes | None = None
         self._last_llm_frame_time: datetime | None = None
+        self._last_overlay_frame: bytes | None = None
         self._incident_active = False
         self._incident_start_time: datetime | None = None
         self._consecutive_unhealthy_count = 0
@@ -136,6 +137,11 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._last_llm_frame
 
     @property
+    def last_overlay_frame(self) -> bytes | None:
+        """Return last rendered overlay frame."""
+        return self._last_overlay_frame
+
+    @property
     def history(self) -> list[dict[str, Any]]:
         """Return history list."""
         return list(self._history)
@@ -164,6 +170,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_llm_frame_time": self._last_llm_frame_time.isoformat()
             if self._last_llm_frame_time
             else None,
+            "overlay_available": self._last_overlay_frame is not None,
         }
 
     def _read_entry_options(self) -> None:
@@ -349,6 +356,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "reason": latest.get("reason", ""),
                     "short_explanation": latest.get("short_explanation", ""),
                     "signals": latest.get("signals", {}),
+                    "focus_region": latest.get("focus_region"),
                     "motion_detected": self._motion_detected,
                     "motion_score": self._motion_score,
                     "llm_reachable": self._llm_reachable,
@@ -397,6 +405,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "supports_failed_detected": False,
                 "print_missing_detected": False,
             },
+            "focus_region": None,
             "motion_detected": False,
             "motion_score": None,
             "llm_reachable": None,
@@ -404,6 +413,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_update": None,
             "last_frame_time": None,
             "last_llm_frame_time": None,
+            "overlay_available": False,
             "consecutive_unhealthy_count": 0,
             "incident_active": False,
             "incident_start_time": None,
@@ -743,12 +753,24 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.integration_name,
             )
 
+        if self._last_llm_frame is not None and result.focus_region is not None:
+            self._last_overlay_frame = await self.hass.async_add_executor_job(
+                _render_concern_overlay,
+                self._last_llm_frame,
+                result.focus_region,
+                result.confidence,
+                result.short_explanation,
+            )
+        else:
+            self._last_overlay_frame = None
+
         state = {
             "status": result.status,
             "confidence": result.confidence,
             "reason": result.reason,
             "short_explanation": result.short_explanation,
             "signals": result.signals,
+            "focus_region": result.focus_region,
             "motion_detected": self._motion_detected,
             "motion_score": self._motion_score,
             "llm_reachable": self._llm_reachable,
@@ -760,6 +782,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_llm_frame_time": self._last_llm_frame_time.isoformat()
             if self._last_llm_frame_time
             else None,
+            "overlay_available": self._last_overlay_frame is not None,
             "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
             "incident_active": self._incident_active,
             "incident_start_time": self._incident_start_time.isoformat()
@@ -777,12 +800,14 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "reason": result.reason,
             "short_explanation": result.short_explanation,
             "signals": result.signals,
+            "focus_region": result.focus_region,
             "motion_detected": self._motion_detected,
             "motion_score": self._motion_score,
             "llm_reachable": self._llm_reachable,
             "llm_provider": self.llm_provider,
             "frame_time": state["last_frame_time"],
             "llm_frame_time": state["last_llm_frame_time"],
+            "overlay_available": state["overlay_available"],
             "incident_active": self._incident_active,
             "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
         }
@@ -837,6 +862,79 @@ def _motion_signature(frame: bytes) -> list[int]:
     with Image.open(BytesIO(frame)) as img:
         grayscale = img.convert("L").resize((32, 32))
         return list(grayscale.getdata())
+
+
+def _render_concern_overlay(
+    frame: bytes,
+    focus_region: dict[str, float],
+    confidence: float | None,
+    short_explanation: str,
+) -> bytes:
+    """Render a concern rectangle and confidence label onto the frame."""
+    from PIL import Image, ImageDraw, ImageFont  # pylint: disable=import-outside-toplevel
+
+    with Image.open(BytesIO(frame)) as img:
+        rendered = img.convert("RGB")
+        draw = ImageDraw.Draw(rendered, "RGBA")
+        font = ImageFont.load_default()
+
+        image_width, image_height = rendered.size
+        left = max(0, min(image_width - 1, round(focus_region["x"] * image_width)))
+        top = max(0, min(image_height - 1, round(focus_region["y"] * image_height)))
+        right = max(
+            left + 1,
+            min(image_width, round((focus_region["x"] + focus_region["width"]) * image_width)),
+        )
+        bottom = max(
+            top + 1,
+            min(
+                image_height,
+                round((focus_region["y"] + focus_region["height"]) * image_height),
+            ),
+        )
+
+        outline_width = max(3, round(min(image_width, image_height) * 0.01))
+        draw.rectangle(
+            [(left, top), (right, bottom)],
+            outline=(255, 64, 64, 255),
+            fill=(255, 64, 64, 40),
+            width=outline_width,
+        )
+
+        confidence_pct = "n/a" if confidence is None else f"{confidence * 100:.0f}%"
+        label = f"Concern {confidence_pct}"
+        if short_explanation:
+            label = f"{label} - {short_explanation}"
+
+        padding = 6
+        bbox = draw.textbbox((0, 0), label, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        label_x = max(0, min(left, image_width - text_width - (padding * 2)))
+        label_y = top - text_height - (padding * 2)
+        if label_y < 0:
+            label_y = min(image_height - text_height - (padding * 2), bottom + padding)
+
+        draw.rounded_rectangle(
+            [
+                (label_x, label_y),
+                (label_x + text_width + (padding * 2), label_y + text_height + (padding * 2)),
+            ],
+            radius=8,
+            fill=(24, 24, 24, 220),
+            outline=(255, 64, 64, 255),
+            width=2,
+        )
+        draw.text(
+            (label_x + padding, label_y + padding),
+            label,
+            fill=(255, 255, 255, 255),
+            font=font,
+        )
+
+        output = BytesIO()
+        rendered.save(output, format="JPEG", quality=92)
+        return output.getvalue()
 
 
 def _detect_motion_and_signature(

@@ -116,6 +116,12 @@ REQUIRED JSON SCHEMA:
 \"confidence\": number,
 \"reason\": string,
 \"short_explanation\": string,
+\"focus_region\": {
+\"x\": number,
+\"y\": number,
+\"width\": number,
+\"height\": number
+} | null,
 \"signals\": {
 \"bed_adhesion_ok\": boolean,
 \"spaghetti_detected\": boolean,
@@ -125,8 +131,14 @@ REQUIRED JSON SCHEMA:
 \"supports_failed_detected\": boolean,
 \"print_missing_detected\": boolean
 }
-}"""
+}
+}
 
-USER_PROMPT = "Analyze this printer camera frame and return JSON only."
+If status is UNHEALTHY and the issue is visibly localized, set focus_region to a normalized box (0.0-1.0) around the clearest area of concern. Otherwise set focus_region to null."""
+
+USER_PROMPT = (
+    "Analyze this printer camera frame and return JSON only. "
+    "When UNHEALTHY and a localized problem is visible, include focus_region."
+)
 
 DEFAULT_VISION_PROMPT = SYSTEM_PROMPT

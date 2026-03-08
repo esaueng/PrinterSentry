@@ -45,9 +45,34 @@ class Sentry3DLastFrameCamera(CoordinatorEntity[Sentry3DCoordinator], Camera):
     @property
     def available(self) -> bool:
         return (
-            self.coordinator.last_llm_frame is not None
+            self.coordinator.last_overlay_frame is not None
+            or self.coordinator.last_llm_frame is not None
             or self.coordinator.last_frame is not None
         )
+
+    @property
+    def is_on(self) -> bool:
+        return (
+            self.coordinator.last_overlay_frame is not None
+            or self.coordinator.last_llm_frame is not None
+            or self.coordinator.last_frame is not None
+        )
+
+    @property
+    def is_recording(self) -> bool:
+        return False
+
+    @property
+    def brand(self) -> str:
+        return "Sentry3D"
+
+    @property
+    def model(self) -> str:
+        return "Concern Overlay Camera"
+
+    @property
+    def motion_detection_enabled(self) -> bool:
+        return False
 
     @property
     def is_streaming(self) -> bool:
@@ -58,19 +83,27 @@ class Sentry3DLastFrameCamera(CoordinatorEntity[Sentry3DCoordinator], Camera):
         width: int | None = None,
         height: int | None = None,
     ) -> bytes | None:
-        """Return the latest JPEG frame bytes sent to the LLM."""
-        return self.coordinator.last_llm_frame or self.coordinator.last_frame
+        """Return the latest annotated JPEG frame bytes."""
+        return (
+            self.coordinator.last_overlay_frame
+            or self.coordinator.last_llm_frame
+            or self.coordinator.last_frame
+        )
 
     @property
-    def extra_state_attributes(self) -> dict[str, str | None]:
+    def extra_state_attributes(self) -> dict[str, str | bool | dict[str, float] | None]:
         frame_source = None
-        if self.coordinator.last_llm_frame is not None:
+        if self.coordinator.last_overlay_frame is not None:
+            frame_source = "overlay"
+        elif self.coordinator.last_llm_frame is not None:
             frame_source = "llm"
         elif self.coordinator.last_frame is not None:
             frame_source = "capture_fallback"
 
         return {
             "frame_source": frame_source,
+            "overlay_available": self.coordinator.data.get("overlay_available", False),
+            "focus_region": self.coordinator.data.get("focus_region"),
             "last_frame_time": self.coordinator.data.get("last_frame_time"),
             "last_llm_frame_time": self.coordinator.data.get("last_llm_frame_time"),
             "last_update": self.coordinator.data.get("last_update"),
