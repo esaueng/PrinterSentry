@@ -31,7 +31,8 @@ class Sentry3DLastFrameCamera(CoordinatorEntity[Sentry3DCoordinator], Camera):
     _attr_content_type = "image/jpeg"
 
     def __init__(self, coordinator: Sentry3DCoordinator, entry: ConfigEntry) -> None:
-        super().__init__(coordinator)
+        Camera.__init__(self)
+        CoordinatorEntity.__init__(self, coordinator)
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_last_frame"
         self._attr_device_info = {
