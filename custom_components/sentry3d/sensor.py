@@ -76,6 +76,10 @@ class Sentry3DStatusSensor(Sentry3DBaseEntity, SensorEntity):
             "llm_reachable": data.get("llm_reachable"),
             "llm_provider": data.get("llm_provider"),
             "overlay_available": data.get("overlay_available"),
+            "unhealthy_confidence_threshold": data.get(
+                "unhealthy_confidence_threshold"
+            ),
+            "unhealthy_gate_passed": data.get("unhealthy_gate_passed"),
             "consecutive_unhealthy_count": data.get("consecutive_unhealthy_count", 0),
             "incident_active": data.get("incident_active", False),
             "last_notification_time": data.get("last_notification_time"),

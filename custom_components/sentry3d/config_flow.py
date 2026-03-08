@@ -43,6 +43,7 @@ from .const import (
     CONF_OPENAI_MODEL,
     CONF_RTSP_URL,
     CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+    CONF_UNHEALTHY_CONFIDENCE_THRESHOLD,
     CONF_VISION_PROMPT,
     DEFAULT_CAPTURE_METHOD,
     DEFAULT_CHECK_INTERVAL_SEC,
@@ -58,6 +59,7 @@ from .const import (
     DEFAULT_OPENAI_MODEL,
     DEFAULT_OLLAMA_TIMEOUT_SEC,
     DEFAULT_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+    DEFAULT_UNHEALTHY_CONFIDENCE_THRESHOLD,
     DEFAULT_VISION_PROMPT,
     DOMAIN,
     LLM_PROVIDER_OLLAMA,
@@ -80,6 +82,7 @@ def _default_values() -> dict[str, Any]:
         CONF_OLLAMA_TIMEOUT_SEC: DEFAULT_OLLAMA_TIMEOUT_SEC,
         CONF_HISTORY_SIZE: DEFAULT_HISTORY_SIZE,
         CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD: DEFAULT_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+        CONF_UNHEALTHY_CONFIDENCE_THRESHOLD: DEFAULT_UNHEALTHY_CONFIDENCE_THRESHOLD,
         CONF_MAX_BACKOFF_SEC: DEFAULT_MAX_BACKOFF_SEC,
         CONF_CAPTURE_METHOD: DEFAULT_CAPTURE_METHOD,
         CONF_NOTIFY_ON_INCIDENT: DEFAULT_NOTIFY_ON_INCIDENT,
@@ -137,6 +140,17 @@ def _runtime_schema_fields(defaults: dict[str, Any]) -> dict[Any, Any]:
             default=defaults[CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD],
         ): NumberSelector(
             NumberSelectorConfig(min=1, max=100, mode=NumberSelectorMode.BOX)
+        ),
+        vol.Required(
+            CONF_UNHEALTHY_CONFIDENCE_THRESHOLD,
+            default=defaults[CONF_UNHEALTHY_CONFIDENCE_THRESHOLD],
+        ): NumberSelector(
+            NumberSelectorConfig(
+                min=0.1,
+                max=0.99,
+                step=0.01,
+                mode=NumberSelectorMode.BOX,
+            )
         ),
         vol.Required(
             CONF_MAX_BACKOFF_SEC,
@@ -256,6 +270,12 @@ def _validate_runtime_input(user_input: dict[str, Any]) -> dict[str, Any]:
     data[CONF_MOTION_THRESHOLD] = float(data[CONF_MOTION_THRESHOLD])
     if data[CONF_MOTION_THRESHOLD] <= 0:
         raise ValueError("invalid_motion_threshold")
+
+    data[CONF_UNHEALTHY_CONFIDENCE_THRESHOLD] = float(
+        data[CONF_UNHEALTHY_CONFIDENCE_THRESHOLD]
+    )
+    if not 0 < data[CONF_UNHEALTHY_CONFIDENCE_THRESHOLD] < 1:
+        raise ValueError("invalid_unhealthy_confidence_threshold")
 
     data[CONF_MOTION_DETECTION_ENABLED] = bool(data[CONF_MOTION_DETECTION_ENABLED])
     data[CONF_NOTIFY_ON_INCIDENT] = bool(data[CONF_NOTIFY_ON_INCIDENT])

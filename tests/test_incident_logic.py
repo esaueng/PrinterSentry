@@ -8,7 +8,7 @@ from custom_components.sentry3d.const import (
     STATUS_UNHEALTHY,
     STATUS_UNKNOWN,
 )
-from custom_components.sentry3d.logic import apply_incident_logic
+from custom_components.sentry3d.logic import apply_incident_logic, is_confident_unhealthy
 
 
 def test_incident_triggers_on_threshold() -> None:
@@ -65,3 +65,21 @@ def test_empty_clears_incident_like_healthy() -> None:
     assert transition.incident_active is False
     assert transition.new_incident is False
     assert transition.cleared_incident is True
+
+
+def test_confident_unhealthy_respects_threshold() -> None:
+    assert is_confident_unhealthy(
+        status=STATUS_UNHEALTHY,
+        confidence=0.93,
+        threshold=0.9,
+    )
+    assert not is_confident_unhealthy(
+        status=STATUS_UNHEALTHY,
+        confidence=0.89,
+        threshold=0.9,
+    )
+    assert not is_confident_unhealthy(
+        status=STATUS_HEALTHY,
+        confidence=0.99,
+        threshold=0.9,
+    )

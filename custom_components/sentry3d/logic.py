@@ -50,11 +50,18 @@ class IncidentTransition:
     cleared_incident: bool
 
 
-def _derive_short_explanation(text: str, fallback: str = "Unknown") -> str:
+def _normalize_short_explanation(text: str, fallback: str = "Unknown") -> str:
     """Build a concise UI-friendly summary from a longer message."""
     normalized = " ".join(text.strip().split())
     if not normalized:
         return fallback
+
+    lowered = normalized.lower()
+    for prefix in ("there is ", "there are ", "the ", "a ", "an "):
+        if lowered.startswith(prefix):
+            normalized = normalized[len(prefix) :].strip()
+            lowered = normalized.lower()
+            break
 
     for separator in (":", ";", ".", ",", "\n"):
         normalized = normalized.split(separator, 1)[0].strip()
@@ -62,10 +69,21 @@ def _derive_short_explanation(text: str, fallback: str = "Unknown") -> str:
             break
 
     words = normalized.split()
-    if len(words) > 6:
-        normalized = " ".join(words[:6])
+    if len(words) > 4:
+        normalized = " ".join(words[:4])
 
-    return normalized[:48].strip() or fallback
+    if len(normalized) > 28:
+        normalized = f"{normalized[:25].rstrip()}..."
+
+    if normalized:
+        normalized = normalized[0].upper() + normalized[1:]
+
+    return normalized or fallback
+
+
+def _derive_short_explanation(text: str, fallback: str = "Unknown") -> str:
+    """Derive a short explanation from a longer reason string."""
+    return _normalize_short_explanation(text, fallback)
 
 
 def parse_model_output(raw_text: str) -> InferenceResult:
@@ -104,7 +122,7 @@ def parse_model_output(raw_text: str) -> InferenceResult:
 
     short_explanation = payload.get("short_explanation")
     if isinstance(short_explanation, str) and short_explanation.strip():
-        short_explanation = short_explanation.strip()
+        short_explanation = _normalize_short_explanation(short_explanation)
     else:
         short_explanation = _derive_short_explanation(reason)
 
@@ -185,6 +203,20 @@ def unknown_result(reason: str) -> InferenceResult:
         short_explanation=_derive_short_explanation(reason),
         signals={key: False for key in REQUIRED_SIGNAL_KEYS},
         focus_region=None,
+    )
+
+
+def is_confident_unhealthy(
+    *,
+    status: str,
+    confidence: float | None,
+    threshold: float,
+) -> bool:
+    """Return True when an unhealthy result clears the confidence gate."""
+    return (
+        status == STATUS_UNHEALTHY
+        and confidence is not None
+        and confidence >= threshold
     )
 
 

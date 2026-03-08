@@ -53,6 +53,14 @@ def test_parse_valid_unhealthy() -> None:
     }
 
 
+def test_parse_normalizes_long_short_explanation() -> None:
+    payload = json.loads(VALID_UNHEALTHY)
+    payload["short_explanation"] = "The build plate appears clean and stable"
+
+    result = parse_model_output(json.dumps(payload))
+    assert result.short_explanation == "Build plate appears clean"
+
+
 def test_parse_rejects_non_json_wrapping() -> None:
     with pytest.raises(ValueError):
         parse_model_output(f"model says: {VALID_UNHEALTHY}")

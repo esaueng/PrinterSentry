@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, STATUS_UNHEALTHY
+from .const import DOMAIN
 from .coordinator import Sentry3DCoordinator
 
 
@@ -46,7 +46,7 @@ class Sentry3DBinaryBaseEntity(CoordinatorEntity[Sentry3DCoordinator], BinarySen
 
 
 class Sentry3DUnhealthyBinarySensor(Sentry3DBinaryBaseEntity):
-    """True when latest status is UNHEALTHY."""
+    """True when the latest unhealthy result passes the confidence gate."""
 
     _attr_name = "Unhealthy"
     _attr_icon = "mdi:alert-circle"
@@ -57,7 +57,7 @@ class Sentry3DUnhealthyBinarySensor(Sentry3DBinaryBaseEntity):
 
     @property
     def is_on(self) -> bool:
-        return self.coordinator.data.get("status") == STATUS_UNHEALTHY
+        return bool(self.coordinator.data.get("unhealthy_gate_passed", False))
 
 
 class Sentry3DIncidentBinarySensor(Sentry3DBinaryBaseEntity):

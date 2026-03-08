@@ -41,6 +41,7 @@ from .const import (
     CONF_OPENAI_MODEL,
     CONF_RTSP_URL,
     CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+    CONF_UNHEALTHY_CONFIDENCE_THRESHOLD,
     CONF_VISION_PROMPT,
     DEFAULT_CAPTURE_METHOD,
     DEFAULT_CHECK_INTERVAL_SEC,
@@ -56,6 +57,7 @@ from .const import (
     DEFAULT_OPENAI_MODEL,
     DEFAULT_OLLAMA_TIMEOUT_SEC,
     DEFAULT_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+    DEFAULT_UNHEALTHY_CONFIDENCE_THRESHOLD,
     DEFAULT_VISION_PROMPT,
     DOMAIN,
     EVENT_INCIDENT,
@@ -71,6 +73,7 @@ from .const import (
 from .logic import (
     InferenceResult,
     apply_incident_logic,
+    is_confident_unhealthy,
     parse_model_output,
     should_send_notification,
     unknown_result,
@@ -155,6 +158,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._incident_start_time
             else None,
             "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
+            "unhealthy_confidence_threshold": self.unhealthy_confidence_threshold,
             "capture_backoff_until": self._capture_backoff_until.isoformat()
             if self._capture_backoff_until
             else None,
@@ -242,6 +246,15 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 data.get(
                     CONF_UNHEALTHY_CONSECUTIVE_THRESHOLD,
                     DEFAULT_UNHEALTHY_CONSECUTIVE_THRESHOLD,
+                ),
+            )
+        )
+        self.unhealthy_confidence_threshold = float(
+            options.get(
+                CONF_UNHEALTHY_CONFIDENCE_THRESHOLD,
+                data.get(
+                    CONF_UNHEALTHY_CONFIDENCE_THRESHOLD,
+                    DEFAULT_UNHEALTHY_CONFIDENCE_THRESHOLD,
                 ),
             )
         )
@@ -365,6 +378,10 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "last_frame_time": latest.get("frame_time"),
                     "last_llm_frame_time": latest.get("llm_frame_time"),
                     "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
+                    "unhealthy_confidence_threshold": self.unhealthy_confidence_threshold,
+                    "unhealthy_gate_passed": latest.get(
+                        "unhealthy_gate_passed", False
+                    ),
                     "incident_active": self._incident_active,
                     "incident_start_time": self._incident_start_time.isoformat()
                     if self._incident_start_time
@@ -415,6 +432,8 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "last_llm_frame_time": None,
             "overlay_available": False,
             "consecutive_unhealthy_count": 0,
+            "unhealthy_confidence_threshold": self.unhealthy_confidence_threshold,
+            "unhealthy_gate_passed": False,
             "incident_active": False,
             "incident_start_time": None,
             "last_notification_time": None,
@@ -699,8 +718,17 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now: datetime,
     ) -> dict[str, Any]:
         """Apply result to state, history, incidents, and notifications."""
+        confident_unhealthy = is_confident_unhealthy(
+            status=result.status,
+            confidence=result.confidence,
+            threshold=self.unhealthy_confidence_threshold,
+        )
+        incident_status = result.status
+        if result.status == STATUS_UNHEALTHY and not confident_unhealthy:
+            incident_status = STATUS_UNKNOWN
+
         transition = apply_incident_logic(
-            current_status=result.status,
+            current_status=incident_status,
             previous_consecutive_unhealthy=self._consecutive_unhealthy_count,
             incident_active=self._incident_active,
             unhealthy_consecutive_threshold=self.unhealthy_consecutive_threshold,
@@ -784,6 +812,8 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else None,
             "overlay_available": self._last_overlay_frame is not None,
             "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
+            "unhealthy_confidence_threshold": self.unhealthy_confidence_threshold,
+            "unhealthy_gate_passed": confident_unhealthy,
             "incident_active": self._incident_active,
             "incident_start_time": self._incident_start_time.isoformat()
             if self._incident_start_time
@@ -810,6 +840,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "overlay_available": state["overlay_available"],
             "incident_active": self._incident_active,
             "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
+            "unhealthy_gate_passed": state["unhealthy_gate_passed"],
         }
         self._history.append(history_record)
 

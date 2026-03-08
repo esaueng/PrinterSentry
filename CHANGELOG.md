@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6 - 2026-03-08
+
+- Short explanation strings are now normalized more aggressively so they fit better in Home Assistant history/cards
+- Added `unhealthy_confidence_threshold` option with a default of `0.9`
+- `binary_sensor.unhealthy` and incident triggering now require UNHEALTHY confidence to clear the configured threshold
+
 ## 0.3.5 - 2026-03-07
 
 - Derived `short_explanation` from `reason` when the model omits it, instead of failing the whole result
