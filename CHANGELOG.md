@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.7 - 2026-03-08
+
+- Prevented coordinator update exceptions from making all coordinator-backed entities unavailable
+- When an internal update error occurs, Sentry3D now keeps entities online and surfaces the failure reason in state instead
+
 ## 0.3.6 - 2026-03-08
 
 - Short explanation strings are now normalized more aggressively so they fit better in Home Assistant history/cards

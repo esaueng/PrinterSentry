@@ -443,73 +443,85 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Run one full check cycle."""
         now = dt_util.utcnow()
 
-        if self._capture_backoff_until and now < self._capture_backoff_until:
-            remaining = (self._capture_backoff_until - now).total_seconds()
-            result = unknown_result(
-                f"Capture backoff active ({remaining:.1f}s remaining)"
-            )
-            return await self._async_finalize_cycle(result, now)
-
         try:
-            frame = await self._async_capture_frame()
-            self._last_frame = frame
-            self._last_frame_time = now
-            self._capture_backoff_sec = 0
-            self._capture_backoff_until = None
+            if self._capture_backoff_until and now < self._capture_backoff_until:
+                remaining = (self._capture_backoff_until - now).total_seconds()
+                result = unknown_result(
+                    f"Capture backoff active ({remaining:.1f}s remaining)"
+                )
+                return await self._async_finalize_cycle(result, now)
+
+            try:
+                frame = await self._async_capture_frame()
+                self._last_frame = frame
+                self._last_frame_time = now
+                self._capture_backoff_sec = 0
+                self._capture_backoff_until = None
+            except asyncio.CancelledError:
+                if self.hass.is_stopping:
+                    raise
+                _LOGGER.warning(
+                    "RTSP frame capture refresh was cancelled for %s; keeping state as UNKNOWN",
+                    self.integration_name,
+                )
+                return await self._async_finalize_cycle(
+                    unknown_result("Frame capture cancelled"),
+                    now,
+                )
+            except Exception as err:  # noqa: BLE001
+                self._capture_backoff_sec = (
+                    self.check_interval_sec
+                    if self._capture_backoff_sec == 0
+                    else min(self.max_backoff_sec, self._capture_backoff_sec * 2)
+                )
+                delay_sec = self._capture_backoff_sec + random.uniform(
+                    0, max(0.1, self._capture_backoff_sec * 0.25)
+                )
+                self._capture_backoff_until = now + timedelta(seconds=delay_sec)
+                _LOGGER.warning(
+                    "RTSP frame capture failed for %s: %s. Retrying in %.1fs",
+                    self.rtsp_url,
+                    err,
+                    delay_sec,
+                )
+                result = unknown_result(f"Frame capture failed: {err}")
+                return await self._async_finalize_cycle(result, now)
+
+            (
+                self._motion_detected,
+                self._motion_score,
+                self._previous_motion_signature,
+            ) = await self.hass.async_add_executor_job(
+                _detect_motion_and_signature,
+                self._previous_motion_signature,
+                frame,
+                self.motion_threshold,
+            )
+
+            if self.motion_detection_enabled and not self._motion_detected:
+                _LOGGER.debug(
+                    "No motion detected for %s, skipping LLM inference",
+                    self.integration_name,
+                )
+                result = unknown_result("No motion detected; inference skipped")
+                result.short_explanation = "No motion detected"
+                return await self._async_finalize_cycle(result, now)
+
+            self._last_llm_frame = frame
+            self._last_llm_frame_time = now
+            result = await self._async_infer_frame(frame)
+            return await self._async_finalize_cycle(result, now)
         except asyncio.CancelledError:
-            if self.hass.is_stopping:
-                raise
-            _LOGGER.warning(
-                "RTSP frame capture refresh was cancelled for %s; keeping state as UNKNOWN",
-                self.integration_name,
-            )
-            return await self._async_finalize_cycle(
-                unknown_result("Frame capture cancelled"),
-                now,
-            )
+            raise
         except Exception as err:  # noqa: BLE001
-            self._capture_backoff_sec = (
-                self.check_interval_sec
-                if self._capture_backoff_sec == 0
-                else min(self.max_backoff_sec, self._capture_backoff_sec * 2)
-            )
-            delay_sec = self._capture_backoff_sec + random.uniform(
-                0, max(0.1, self._capture_backoff_sec * 0.25)
-            )
-            self._capture_backoff_until = now + timedelta(seconds=delay_sec)
-            _LOGGER.warning(
-                "RTSP frame capture failed for %s: %s. Retrying in %.1fs",
-                self.rtsp_url,
-                err,
-                delay_sec,
-            )
-            result = unknown_result(f"Frame capture failed: {err}")
-            return await self._async_finalize_cycle(result, now)
-
-        (
-            self._motion_detected,
-            self._motion_score,
-            self._previous_motion_signature,
-        ) = await self.hass.async_add_executor_job(
-            _detect_motion_and_signature,
-            self._previous_motion_signature,
-            frame,
-            self.motion_threshold,
-        )
-
-        if self.motion_detection_enabled and not self._motion_detected:
-            _LOGGER.debug(
-                "No motion detected for %s, skipping LLM inference",
+            _LOGGER.exception(
+                "Unexpected coordinator update failure for %s",
                 self.integration_name,
             )
-            result = unknown_result("No motion detected; inference skipped")
-            result.short_explanation = "No motion detected"
-            return await self._async_finalize_cycle(result, now)
-
-        self._last_llm_frame = frame
-        self._last_llm_frame_time = now
-        result = await self._async_infer_frame(frame)
-        return await self._async_finalize_cycle(result, now)
+            return self._build_safe_state(
+                reason=f"Coordinator update failed: {err}",
+                now=now,
+            )
 
     async def _async_capture_frame(self) -> bytes:
         """Capture a single JPEG from RTSP."""
@@ -867,6 +879,38 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             title="Sentry3D Alert: Print Unhealthy",
             notification_id=f"{DOMAIN}_{self.config_entry.entry_id}_incident",
         )
+
+    def _build_safe_state(self, *, reason: str, now: datetime) -> dict[str, Any]:
+        """Return a non-raising fallback state so entities stay available."""
+        state = self._default_state(reason)
+        state.update(
+            {
+                "motion_detected": self._motion_detected,
+                "motion_score": self._motion_score,
+                "llm_reachable": self._llm_reachable,
+                "llm_provider": self.llm_provider,
+                "last_update": now.isoformat(),
+                "last_frame_time": self._last_frame_time.isoformat()
+                if self._last_frame_time
+                else None,
+                "last_llm_frame_time": self._last_llm_frame_time.isoformat()
+                if self._last_llm_frame_time
+                else None,
+                "overlay_available": self._last_overlay_frame is not None,
+                "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
+                "unhealthy_confidence_threshold": self.unhealthy_confidence_threshold,
+                "unhealthy_gate_passed": False,
+                "incident_active": self._incident_active,
+                "incident_start_time": self._incident_start_time.isoformat()
+                if self._incident_start_time
+                else None,
+                "last_notification_time": self._last_notification_time.isoformat()
+                if self._last_notification_time
+                else None,
+            }
+        )
+        self.data = state
+        return state
 
 
 def _extract_openai_content(content: Any) -> str:
