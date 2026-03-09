@@ -61,6 +61,14 @@ def test_parse_normalizes_long_short_explanation() -> None:
     assert result.short_explanation == "Build plate appears clean"
 
 
+def test_parse_normalizes_long_reason() -> None:
+    payload = json.loads(VALID_UNHEALTHY)
+    payload["reason"] = "Visible spaghetti strands are forming above the part and curling around the nozzle."
+
+    result = parse_model_output(json.dumps(payload))
+    assert result.reason == "Visible spaghetti strands are forming above the part"
+
+
 def test_parse_accepts_code_fenced_json_and_string_values() -> None:
     payload = {
         "status": "unhealthy",

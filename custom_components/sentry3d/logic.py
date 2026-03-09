@@ -86,6 +86,30 @@ def _derive_short_explanation(text: str, fallback: str = "Unknown") -> str:
     return _normalize_short_explanation(text, fallback)
 
 
+def _normalize_reason(text: str) -> str:
+    """Normalize the model reason to a short single-sentence summary."""
+    normalized = " ".join(text.strip().split())
+    if not normalized:
+        return ""
+
+    for separator in (".", ";", "\n"):
+        normalized = normalized.split(separator, 1)[0].strip()
+        if normalized:
+            break
+
+    words = normalized.split()
+    if len(words) > 8:
+        normalized = " ".join(words[:8])
+
+    if len(normalized) > 56:
+        normalized = f"{normalized[:53].rstrip()}..."
+
+    if normalized:
+        normalized = normalized[0].upper() + normalized[1:]
+
+    return normalized
+
+
 def parse_model_output(raw_text: str) -> InferenceResult:
     """Parse and validate strict JSON output from Ollama."""
     stripped = _extract_json_object(raw_text)
@@ -126,7 +150,9 @@ def parse_model_output(raw_text: str) -> InferenceResult:
     reason = payload.get("reason")
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError("Reason must be a non-empty string")
-    reason = reason.strip()
+    reason = _normalize_reason(reason)
+    if not reason:
+        raise ValueError("Reason must be a non-empty string")
 
     short_explanation = payload.get("short_explanation")
     if isinstance(short_explanation, str) and short_explanation.strip():

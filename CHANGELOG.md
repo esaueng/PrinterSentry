@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.9 - 2026-03-08
+
+- Tightened the default prompt so `reason` is requested as a short 5-8 word sentence
+- Normalized parsed `reason` text to a compact single-sentence summary so it fits better in Home Assistant
+
 ## 0.3.8 - 2026-03-08
 
 - Force Update button now bypasses motion gating for one refresh and sends a frame to the LLM immediately

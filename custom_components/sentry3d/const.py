@@ -164,6 +164,8 @@ Additional rule for bed_adhesion_ok:
 
 Reason rules:
 * reason must be a short visual explanation focused on the build plate
+* reason must be one sentence, ideally 5-8 words
+* keep reason compact enough to fit in a Home Assistant state/attribute line without truncation
 * short_explanation must be a very short phrase (3-8 words) for quick UI display
 
 Overlay rule:
