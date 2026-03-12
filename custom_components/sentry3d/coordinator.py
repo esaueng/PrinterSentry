@@ -185,6 +185,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else None,
             "capture_backoff_sec": self._capture_backoff_sec,
             "motion_detected": self._motion_detected,
+            "motion_detection_enabled": self.motion_detection_enabled,
             "motion_score": self._motion_score,
             "llm_reachable": self._llm_reachable,
             "llm_provider": self.llm_provider,
@@ -473,6 +474,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             },
             "focus_region": None,
             "motion_detected": False,
+            "motion_detection_enabled": self.motion_detection_enabled,
             "motion_score": None,
             "llm_reachable": None,
             "llm_provider": self.llm_provider,
@@ -552,16 +554,21 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     result = unknown_result(f"Frame capture failed: {err}")
                     return await self._async_finalize_cycle(result, now)
 
-            (
-                self._motion_detected,
-                self._motion_score,
-                self._previous_motion_signature,
-            ) = await self.hass.async_add_executor_job(
-                _detect_motion_and_signature,
-                self._previous_motion_signature,
-                frame,
-                self.motion_threshold,
-            )
+            if self.motion_detection_enabled:
+                (
+                    self._motion_detected,
+                    self._motion_score,
+                    self._previous_motion_signature,
+                ) = await self.hass.async_add_executor_job(
+                    _detect_motion_and_signature,
+                    self._previous_motion_signature,
+                    frame,
+                    self.motion_threshold,
+                )
+            else:
+                self._motion_detected = False
+                self._motion_score = None
+                self._previous_motion_signature = None
 
             if (
                 self.motion_detection_enabled
@@ -896,6 +903,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "signals": result.signals,
             "focus_region": result.focus_region,
             "motion_detected": self._motion_detected,
+            "motion_detection_enabled": self.motion_detection_enabled,
             "motion_score": self._motion_score,
             "llm_reachable": self._llm_reachable,
             "llm_provider": self.llm_provider,
@@ -928,6 +936,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "signals": result.signals,
             "focus_region": result.focus_region,
             "motion_detected": self._motion_detected,
+            "motion_detection_enabled": self.motion_detection_enabled,
             "motion_score": self._motion_score,
             "llm_reachable": self._llm_reachable,
             "llm_provider": self.llm_provider,
@@ -970,6 +979,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state.update(
             {
                 "motion_detected": self._motion_detected,
+                "motion_detection_enabled": self.motion_detection_enabled,
                 "motion_score": self._motion_score,
                 "llm_reachable": self._llm_reachable,
                 "llm_provider": self.llm_provider,
@@ -1012,6 +1022,16 @@ def _extract_openai_content(content: Any) -> str:
                     text_parts.append(text.strip())
         return "\n".join(text_parts).strip()
     return ""
+
+
+def _motion_cutoff_from_threshold(threshold: float) -> float:
+    """Convert user sensitivity setting into a diff cutoff.
+
+    Higher configured values should be more sensitive, so they must produce a
+    lower required frame-difference cutoff.
+    """
+    safe_threshold = max(0.1, float(threshold))
+    return 64.0 / safe_threshold
 
 
 def _motion_signature(frame: bytes) -> list[int]:
@@ -1117,7 +1137,8 @@ def _detect_motion_and_signature(
     mean_abs_diff = sum(
         abs(curr - prev) for curr, prev in zip(current_signature, previous_signature)
     ) / len(current_signature)
-    return mean_abs_diff >= threshold, float(mean_abs_diff), current_signature
+    cutoff = _motion_cutoff_from_threshold(threshold)
+    return mean_abs_diff >= cutoff, float(mean_abs_diff), current_signature
 
 
 def _capture_frame_ffmpeg(rtsp_url: str, timeout: int) -> bytes:

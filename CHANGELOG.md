@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.15 - 2026-03-12
+
+- Made motion detection bypass explicit so disabling it no longer participates in inference gating
+- Reworked the motion sensitivity setting so higher values trigger motion more easily
+- Renamed the UI label from `Motion Threshold` to `Motion Sensitivity`
+
 ## 0.3.14 - 2026-03-08
 
 - Persisted the latest captured, LLM, and overlay preview frames so the camera entity can restore a real image after reloads/restarts instead of dropping to unavailable

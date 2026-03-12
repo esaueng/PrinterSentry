@@ -29,7 +29,7 @@
           "notify_on_incident": "Notify on Incident",
           "min_notification_interval_sec": "Minimum Notification Interval (seconds)",
           "motion_detection_enabled": "Motion Detection Enabled",
-          "motion_threshold": "Motion Threshold"
+          "motion_threshold": "Motion Sensitivity"
         }
       },
       "openai": {
@@ -51,7 +51,7 @@
           "notify_on_incident": "Notify on Incident",
           "min_notification_interval_sec": "Minimum Notification Interval (seconds)",
           "motion_detection_enabled": "Motion Detection Enabled",
-          "motion_threshold": "Motion Threshold"
+          "motion_threshold": "Motion Sensitivity"
         }
       }
     },
@@ -98,7 +98,7 @@
           "notify_on_incident": "Notify on Incident",
           "min_notification_interval_sec": "Minimum Notification Interval (seconds)",
           "motion_detection_enabled": "Motion Detection Enabled",
-          "motion_threshold": "Motion Threshold"
+          "motion_threshold": "Motion Sensitivity"
         }
       },
       "openai": {
@@ -120,7 +120,7 @@
           "notify_on_incident": "Notify on Incident",
           "min_notification_interval_sec": "Minimum Notification Interval (seconds)",
           "motion_detection_enabled": "Motion Detection Enabled",
-          "motion_threshold": "Motion Threshold"
+          "motion_threshold": "Motion Sensitivity"
         }
       }
     },
