@@ -392,6 +392,7 @@ class Sentry3DConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=_build_base_schema(self._defaults),
             errors=errors,
+            last_step=False,
         )
 
     async def async_step_ollama(
@@ -433,6 +434,7 @@ class Sentry3DConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="ollama",
             data_schema=_build_ollama_schema(defaults),
             errors=errors,
+            last_step=True,
         )
 
     async def async_step_openai(
@@ -474,6 +476,7 @@ class Sentry3DConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="openai",
             data_schema=_build_openai_schema(defaults),
             errors=errors,
+            last_step=True,
         )
 
     @staticmethod
@@ -511,6 +514,7 @@ class Sentry3DOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             data_schema=_build_base_schema(self._defaults),
             errors=errors,
+            last_step=False,
         )
 
     async def async_step_ollama(
@@ -542,6 +546,7 @@ class Sentry3DOptionsFlow(config_entries.OptionsFlow):
             step_id="ollama",
             data_schema=_build_ollama_schema(self._defaults),
             errors=errors,
+            last_step=True,
         )
 
     async def async_step_openai(
@@ -573,4 +578,5 @@ class Sentry3DOptionsFlow(config_entries.OptionsFlow):
             step_id="openai",
             data_schema=_build_openai_schema(self._defaults),
             errors=errors,
+            last_step=True,
         )

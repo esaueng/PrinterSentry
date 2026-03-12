@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.20 - 2026-03-12
+
+- Marked the base setup/options form as a non-final step so Home Assistant renders `Next` instead of `Submit` before provider-specific settings
+
 ## 0.3.19 - 2026-03-12
 
 - Replaced the packaged default vision prompt with the exact build-plate-focused prompt text requested for FDM print inspection
