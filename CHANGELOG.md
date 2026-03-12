@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.16 - 2026-03-12
+
+- Fixed a coordinator crash caused by a missing `STATUS_UNHEALTHY` import during result finalization, which was forcing valid updates into `UNKNOWN`
+
 ## 0.3.15 - 2026-03-12
 
 - Made motion detection bypass explicit so disabling it no longer participates in inference gating
