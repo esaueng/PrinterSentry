@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.19 - 2026-03-12
+
+- Replaced the packaged default vision prompt with the exact build-plate-focused prompt text requested for FDM print inspection
+
 ## 0.3.18 - 2026-03-12
 
 - Added a dedicated `Reason` sensor and exposed the full reason as an attribute on `Short Explanation` so the full explanation remains readable in Home Assistant even though the frontend truncates long state strings
