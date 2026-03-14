@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.21 - 2026-03-13
+
+- Changed the packaged default Ollama model to `gemma3:4b`
+
 ## 0.3.20 - 2026-03-12
 
 - Marked the base setup/options form as a non-final step so Home Assistant renders `Next` instead of `Submit` before provider-specific settings
