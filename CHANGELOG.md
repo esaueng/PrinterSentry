@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.22 - 2026-03-13
+
+- Replaced the packaged default vision prompt with the updated active-print FDM inspection prompt focused on visible build plate conditions
+
 ## 0.3.21 - 2026-03-13
 
 - Changed the packaged default Ollama model to `gemma3:4b`
