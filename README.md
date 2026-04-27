@@ -172,4 +172,4 @@ pytest -q
 
 ## License
 
-MIT
+Apache-2.0
