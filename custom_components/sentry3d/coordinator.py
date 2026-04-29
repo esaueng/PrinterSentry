@@ -149,6 +149,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._motion_score: float | None = None
         self._previous_motion_signature: list[int] | None = None
         self._llm_reachable: bool | None = None
+        self._monitoring_enabled = True
 
         self._read_entry_options()
 
@@ -185,6 +186,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def runtime_state(self) -> dict[str, Any]:
         """Return internal runtime diagnostics."""
         return {
+            "monitoring_enabled": self._monitoring_enabled,
             "incident_active": self._incident_active,
             "incident_start_time": self._incident_start_time.isoformat()
             if self._incident_start_time
@@ -217,6 +219,33 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "capture_reused_last_frame": self._capture_reused_last_frame,
             "overlay_available": self._last_overlay_frame is not None,
         }
+
+    @property
+    def monitoring_enabled(self) -> bool:
+        """Return whether periodic monitoring is enabled."""
+        return self._monitoring_enabled
+
+    async def async_set_monitoring_enabled(self, enabled: bool) -> None:
+        """Enable or disable monitoring cycles."""
+        if self._monitoring_enabled == enabled:
+            return
+
+        self._monitoring_enabled = enabled
+        self._store.async_delay_save(self._serialize_store, 5)
+        now = dt_util.utcnow()
+
+        if enabled:
+            self.hass.async_create_task(
+                self.async_refresh(),
+                name=f"{DOMAIN}_{self.config_entry.entry_id}_monitoring_enabled_refresh",
+            )
+            self.async_update_listeners()
+            return
+
+        self._motion_detected = False
+        self._motion_score = None
+        self._previous_motion_signature = None
+        self.async_set_updated_data(self._build_monitoring_disabled_state(now=now))
 
     def _read_entry_options(self) -> None:
         options = self.config_entry.options
@@ -394,6 +423,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._history = deque(history[-self.history_size :], maxlen=self.history_size)
 
         self._incident_active = bool(stored.get("incident_active", False))
+        self._monitoring_enabled = bool(stored.get("monitoring_enabled", True))
         self._consecutive_unhealthy_count = int(
             stored.get("consecutive_unhealthy_count", 0)
         )
@@ -431,6 +461,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.data.update(
                 {
                     "status": latest.get("status", STATUS_UNKNOWN),
+                    "monitoring_enabled": self._monitoring_enabled,
                     "confidence": latest.get("confidence"),
                     "reason": latest.get("reason", ""),
                     "short_explanation": latest.get("short_explanation", ""),
@@ -489,6 +520,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Serialize coordinator state for storage."""
         return {
             "history": list(self._history),
+            "monitoring_enabled": self._monitoring_enabled,
             "incident_active": self._incident_active,
             "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
             "incident_start_time": self._incident_start_time.isoformat()
@@ -506,6 +538,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Build default state payload."""
         return {
             "status": STATUS_UNKNOWN,
+            "monitoring_enabled": self._monitoring_enabled,
             "confidence": None,
             "reason": reason,
             "short_explanation": "Unknown",
@@ -553,6 +586,9 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_run_update_cycle(self, *, force_inference: bool) -> dict[str, Any]:
         """Run one full check cycle, optionally bypassing motion gating/backoff."""
         now = dt_util.utcnow()
+
+        if not self._monitoring_enabled:
+            return self._build_monitoring_disabled_state(now=now)
 
         try:
             if (
@@ -971,6 +1007,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         state = {
             "status": result.status,
+            "monitoring_enabled": self._monitoring_enabled,
             "confidence": result.confidence,
             "reason": result.reason,
             "short_explanation": result.short_explanation,
@@ -1014,6 +1051,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         history_record = {
             "timestamp": now.isoformat(),
             "status": result.status,
+            "monitoring_enabled": self._monitoring_enabled,
             "confidence": result.confidence,
             "reason": result.reason,
             "short_explanation": result.short_explanation,
@@ -1080,15 +1118,16 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state.update(
             {
                 "motion_detected": self._motion_detected,
+                "monitoring_enabled": self._monitoring_enabled,
                 "motion_detection_enabled": self.motion_detection_enabled,
                 "motion_score": self._motion_score,
-            "llm_reachable": self._llm_reachable,
-            "llm_provider": self.llm_provider,
-            "vision_prompt_hash": _text_digest(self.vision_prompt),
-            "using_default_prompt": self.vision_prompt == DEFAULT_VISION_PROMPT,
-            "last_model_output_hash": self._last_model_output_hash,
-            "last_model_output_excerpt": _text_excerpt(self._last_model_output),
-            "last_update": now.isoformat(),
+                "llm_reachable": self._llm_reachable,
+                "llm_provider": self.llm_provider,
+                "vision_prompt_hash": _text_digest(self.vision_prompt),
+                "using_default_prompt": self.vision_prompt == DEFAULT_VISION_PROMPT,
+                "last_model_output_hash": self._last_model_output_hash,
+                "last_model_output_excerpt": _text_excerpt(self._last_model_output),
+                "last_update": now.isoformat(),
                 "last_frame_time": self._last_frame_time.isoformat()
                 if self._last_frame_time
                 else None,
@@ -1141,6 +1180,7 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         state.update(
             {
                 "motion_detected": self._motion_detected,
+                "monitoring_enabled": self._monitoring_enabled,
                 "motion_detection_enabled": self.motion_detection_enabled,
                 "motion_score": self._motion_score,
                 "llm_reachable": self._llm_reachable,
@@ -1167,6 +1207,53 @@ class Sentry3DCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else None,
                 "inference_skipped": True,
                 "skip_reason": reason,
+            }
+        )
+        self.data = state
+        return state
+
+    def _build_monitoring_disabled_state(self, *, now: datetime) -> dict[str, Any]:
+        """Preserve last known state while monitoring is disabled."""
+        state = self._default_state("Monitoring disabled")
+        if self._last_inference_state is not None:
+            state.update(self._last_inference_state)
+
+        state.update(
+            {
+                "monitoring_enabled": False,
+                "motion_detected": False,
+                "motion_detection_enabled": self.motion_detection_enabled,
+                "motion_score": None,
+                "llm_reachable": self._llm_reachable,
+                "llm_provider": self.llm_provider,
+                "vision_prompt_hash": _text_digest(self.vision_prompt),
+                "using_default_prompt": self.vision_prompt == DEFAULT_VISION_PROMPT,
+                "last_model_output_hash": self._last_model_output_hash,
+                "last_model_output_excerpt": _text_excerpt(self._last_model_output),
+                "last_update": now.isoformat(),
+                "last_frame_time": self._last_frame_time.isoformat()
+                if self._last_frame_time
+                else None,
+                "last_frame_hash": self._last_frame_hash,
+                "last_llm_frame_time": self._last_llm_frame_time.isoformat()
+                if self._last_llm_frame_time
+                else state.get("last_llm_frame_time"),
+                "last_llm_frame_hash": self._last_llm_frame_hash
+                or state.get("last_llm_frame_hash"),
+                "same_frame_count": self._same_frame_count,
+                "capture_reused_last_frame": self._capture_reused_last_frame,
+                "overlay_available": self._last_overlay_frame is not None,
+                "consecutive_unhealthy_count": self._consecutive_unhealthy_count,
+                "unhealthy_confidence_threshold": self.unhealthy_confidence_threshold,
+                "incident_active": self._incident_active,
+                "incident_start_time": self._incident_start_time.isoformat()
+                if self._incident_start_time
+                else None,
+                "last_notification_time": self._last_notification_time.isoformat()
+                if self._last_notification_time
+                else None,
+                "inference_skipped": True,
+                "skip_reason": "Monitoring disabled",
             }
         )
         self.data = state

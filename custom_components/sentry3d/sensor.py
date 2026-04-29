@@ -70,6 +70,7 @@ class Sentry3DStatusSensor(Sentry3DBaseEntity, SensorEntity):
             "reason": data.get("reason"),
             "short_explanation": data.get("short_explanation"),
             "last_update": data.get("last_update"),
+            "monitoring_enabled": data.get("monitoring_enabled"),
             "signals": data.get("signals", {}),
             "focus_region": data.get("focus_region"),
             "motion_detected": data.get("motion_detected"),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "sentry3d"
 
-PLATFORMS = ["sensor", "binary_sensor", "camera", "button"]
+PLATFORMS = ["sensor", "binary_sensor", "camera", "button", "switch"]
 
 CONF_NAME = "name"
 CONF_RTSP_URL = "rtsp_url"
